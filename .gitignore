@@ -3,11 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Local analysis, reports, and notebooks (not required for web app)
-*.ipynb
-*.tex
-*.pdf
-fig_*.png
+# Ignore PNG figures
+*.png
+
+# LaTeX auxiliary build files (keeps report.tex and report.pdf)
 *.aux
 *.log
 *.out
