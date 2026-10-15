@@ -3,7 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# LaTeX auxiliary build files (keep report.tex and report.pdf)
+# Local analysis, reports, and notebooks (not required for web app)
+*.ipynb
+*.tex
+*.pdf
+fig_*.png
 *.aux
 *.log
 *.out

@@ -18,12 +18,10 @@ WORKDIR /home/user/app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application assets, HTML frontend, backend server, dataset, and report
+# Copy application assets, HTML frontend, backend server, and dataset
 COPY --chown=user:user app.py .
 COPY --chown=user:user app.html .
 COPY --chown=user:user medical_insurance.csv .
-COPY --chown=user:user report.pdf .
-COPY --chown=user:user fig_*.png ./
 
 # Pre-train the model during image build so the container boots instantly
 RUN python -c "import app; app.get_or_train_model()" && chown user:user best_model.joblib
