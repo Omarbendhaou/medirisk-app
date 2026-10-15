@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.ipynb
+*.tex
+*.aux
+*.log
+*.out
+*.synctex.gz
+*.toc
+.git/
+.gitignore
+.agents/
+.gemini/

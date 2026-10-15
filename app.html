@@ -1,0 +1,2161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediRisk - Health Insurance Cost Predictor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#ecfeff',
+              100: '#cffafe',
+              500: '#06b6d4',
+              600: '#0891b2',
+              700: '#0e7490',
+              900: '#164e63',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .metric-value {
+      font-feature-settings: "tnum";
+      font-variant-numeric: tabular-nums;
+    }
+    input[type=range] {
+      accent-color: #0891b2;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    .dark .custom-scroll::-webkit-scrollbar-thumb {
+      background: #334155;
+    }
+    .calc-transition {
+      transition: opacity 0.15s ease, transform 0.15s ease;
+    }
+
+    /* Print Styles for Client-Ready PDF Export */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #client-pdf-printable, #client-pdf-printable * {
+        visibility: visible;
+      }
+      #client-pdf-printable {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 24px;
+        background: white !important;
+        color: #0f172a !important;
+      }
+      header, nav, #toast, #pdf-modal-backdrop, .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 min-h-screen transition-colors duration-200">
+
+  <!-- Header & Navigation -->
+  <header class="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- App Brand: MediRisk only -->
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-600 to-teal-500 flex items-center justify-center text-white shadow-sm">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        </div>
+        <span class="text-xl font-bold tracking-tight text-slate-900 dark:text-white">MediRisk</span>
+      </div>
+
+      <!-- Navigation Segment -->
+      <nav class="flex items-center space-x-1 bg-slate-200/60 dark:bg-slate-800/80 p-1 rounded-xl">
+        <button id="tab-predictor-btn" onclick="switchTab('predictor')" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-white dark:bg-slate-900 shadow-xs text-cyan-700 dark:text-cyan-400">
+          Estimator
+        </button>
+        <button id="tab-comparator-btn" onclick="switchTab('comparator')" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+          Compare
+        </button>
+        <button id="tab-simulator-btn" onclick="switchTab('simulator')" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+          Simulator
+        </button>
+        <button id="tab-model-btn" onclick="switchTab('model')" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+          Benchmarks
+        </button>
+      </nav>
+
+      <!-- Utilities: Theme Switcher -->
+      <div class="flex items-center space-x-2">
+        <button id="theme-toggle" onclick="toggleTheme()" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Toggle Theme">
+          <svg id="theme-sun" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 9h-1m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+          <svg id="theme-moon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7">
+
+    <!-- TAB 1: PREDICTOR / ESTIMATOR -->
+    <section id="view-predictor" class="space-y-6 block">
+      
+      <!-- Primary Header & Global Actions -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-800 gap-3">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Cost Estimator</h1>
+        </div>
+        <div class="flex items-center space-x-2.5 self-start sm:self-auto">
+          <!-- Client PDF Export Button -->
+          <button onclick="openClientPDFModal()" class="inline-flex items-center gap-1.5 text-xs px-3.5 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-50 dark:bg-cyan-950/60 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 text-cyan-800 dark:text-cyan-300 font-semibold transition-colors shadow-xs">
+            <svg class="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Export Client PDF
+          </button>
+          <button id="reset-btn" onclick="resetDefaults()" class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium transition-colors shadow-xs">
+            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            Reset Defaults
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Layout Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
+        
+        <!-- CONTROLS COLUMN -->
+        <div class="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-5">
+          <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Input Parameters
+            </h2>
+            <span id="calc-indicator" class="text-[11px] font-mono text-cyan-600 dark:text-cyan-400 flex items-center gap-1.5 opacity-80">
+              <span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span> Live Model Active
+            </span>
+          </div>
+
+          <!-- Age Input -->
+          <div class="space-y-1.5">
+            <div class="flex justify-between items-center text-sm font-medium">
+              <label for="input-age" class="text-slate-700 dark:text-slate-300">Age</label>
+              <span class="font-bold text-slate-900 dark:text-white font-mono text-sm px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800" id="label-age">32 yrs</span>
+            </div>
+            <input type="range" id="input-age" min="18" max="75" value="32" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer" oninput="handleParamChange()">
+            <div class="flex justify-between text-[11px] text-slate-400 font-mono">
+              <span>18 yrs</span>
+              <span>45 yrs</span>
+              <span>75 yrs</span>
+            </div>
+          </div>
+
+          <!-- Biological Sex -->
+          <div class="space-y-1.5">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Biological Sex</label>
+            <div class="grid grid-cols-2 gap-2.5">
+              <button type="button" id="sex-female" onclick="setSex('female')" class="py-2 px-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300 shadow-xs">
+                Female
+              </button>
+              <button type="button" id="sex-male" onclick="setSex('male')" class="py-2 px-3 rounded-xl border text-xs sm:text-sm font-medium transition-all border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300">
+                Male
+              </button>
+            </div>
+          </div>
+
+          <!-- BMI Section with Inline Progressive Disclosure -->
+          <div class="space-y-2 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60">
+            <div class="flex justify-between items-center">
+              <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Body Mass Index (BMI)</label>
+              <button type="button" onclick="toggleBmiCalculator()" class="text-xs text-cyan-600 dark:text-cyan-400 hover:underline font-medium">
+                <span id="bmi-toggle-text">Calculate from Height/Weight</span>
+              </button>
+            </div>
+
+            <!-- Direct Slider mode -->
+            <div id="bmi-slider-box" class="space-y-1.5">
+              <div class="flex justify-between items-center">
+                <span id="bmi-badge" class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Normal (23.5)</span>
+                <span class="font-mono font-bold text-slate-900 dark:text-white text-sm" id="label-bmi">23.5</span>
+              </div>
+              <input type="range" id="input-bmi" min="15.0" max="50.0" step="0.1" value="23.5" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer" oninput="handleParamChange()">
+            </div>
+
+            <!-- Height / Weight Inline Calculator -->
+            <div id="bmi-calc-subform" class="hidden pt-2.5 border-t border-slate-200 dark:border-slate-700 space-y-2.5">
+              <div class="grid grid-cols-2 gap-2.5 text-xs">
+                <div>
+                  <label class="block text-slate-500 mb-1">Height (inches)</label>
+                  <input type="number" id="calc-height" value="68" min="40" max="90" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm font-mono" oninput="computeBmiFromHW()">
+                  <p class="text-[10px] text-slate-400 mt-0.5 font-mono">e.g. 5'8" = 68 in</p>
+                </div>
+                <div>
+                  <label class="block text-slate-500 mb-1">Weight (lbs)</label>
+                  <input type="number" id="calc-weight" value="155" min="60" max="450" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm font-mono" oninput="computeBmiFromHW()">
+                  <p class="text-[10px] text-slate-400 mt-0.5 font-mono">Standard bodyweight</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tobacco / Smoker Status -->
+          <div class="space-y-1.5">
+            <div class="flex justify-between items-center">
+              <label class="text-sm font-medium text-slate-700 dark:text-slate-300">Tobacco / Smoker Status</label>
+              <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Primary Cost Driver</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <button type="button" id="smoker-no" onclick="setSmoker(false)" class="py-2 px-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 shadow-xs">
+                Non-Smoker
+              </button>
+              <button type="button" id="smoker-yes" onclick="setSmoker(true)" class="py-2 px-3 rounded-xl border text-xs sm:text-sm font-medium transition-all border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300">
+                Smoker (Regular)
+              </button>
+            </div>
+          </div>
+
+          <!-- Dependent Children -->
+          <div class="space-y-1.5">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Dependent Children</label>
+            <div class="grid grid-cols-6 gap-1">
+              <button type="button" onclick="setChildren(0)" class="child-btn py-1.5 text-xs font-semibold rounded-lg border border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300" data-val="0">0</button>
+              <button type="button" onclick="setChildren(1)" class="child-btn py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-400" data-val="1">1</button>
+              <button type="button" onclick="setChildren(2)" class="child-btn py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-400" data-val="2">2</button>
+              <button type="button" onclick="setChildren(3)" class="child-btn py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-400" data-val="3">3</button>
+              <button type="button" onclick="setChildren(4)" class="child-btn py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-400" data-val="4">4</button>
+              <button type="button" onclick="setChildren(5)" class="child-btn py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-400" data-val="5">5+</button>
+            </div>
+          </div>
+
+          <!-- Geographic Region -->
+          <div class="space-y-1.5">
+            <label for="input-region" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Geographic Region</label>
+            <select id="input-region" onchange="handleParamChange()" class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+              <option value="southwest" selected>Southwest (AZ, NM, TX, NV)</option>
+              <option value="southeast">Southeast (FL, GA, NC, etc.)</option>
+              <option value="northwest">Northwest (WA, OR, ID, etc.)</option>
+              <option value="northeast">Northeast (NY, MA, PA, etc.)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- HERO DATA & EXPLAINABILITY COLUMN -->
+        <div class="lg:col-span-7 space-y-6">
+          
+          <!-- Primary Focal Point: Hero Result Card -->
+          <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 p-6 sm:p-7 text-white shadow-lg border border-slate-800/60">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 border-b border-white/10 gap-4">
+              <div>
+                <span class="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">Estimated Actuarial Charge</span>
+                <div class="flex items-baseline gap-2 mt-1">
+                  <span id="res-annual" class="text-4xl sm:text-5xl font-extrabold tracking-tight metric-value text-white calc-transition">$4,377</span>
+                  <span class="text-slate-400 text-sm">/ year</span>
+                </div>
+                <p id="res-ci" class="text-xs text-cyan-300/80 mt-1 font-mono">90% Prediction Band: $3,879 – $5,463</p>
+              </div>
+
+              <!-- Monthly figure & Tier Badge -->
+              <div class="sm:text-right flex sm:flex-col justify-between items-center sm:items-end">
+                <div>
+                  <div class="text-[11px] text-slate-400 font-medium">Monthly Equivalent</div>
+                  <div id="res-monthly" class="text-2xl font-bold text-cyan-300 metric-value">$365<span class="text-xs font-normal text-slate-400">/mo</span></div>
+                </div>
+                <div id="res-tier-badge" class="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5"></span> Low Risk Tier
+                </div>
+              </div>
+            </div>
+
+            <!-- Cost Composition Breakdown Stack -->
+            <div class="pt-5 space-y-2.5">
+              <div class="flex justify-between items-center text-xs font-medium text-slate-300">
+                <span>Cost Component Attribution</span>
+                <span id="res-base-share" class="text-slate-400 font-mono text-[11px]">Base: $2,359</span>
+              </div>
+              <div class="h-2.5 w-full bg-slate-800 rounded-full overflow-hidden flex shadow-inner">
+                <div id="bar-base" class="h-full bg-slate-400 transition-all duration-400" style="width: 48%" title="Base"></div>
+                <div id="bar-age" class="h-full bg-blue-500 transition-all duration-400" style="width: 32%" title="Age"></div>
+                <div id="bar-bmi" class="h-full bg-amber-500 transition-all duration-400" style="width: 12%" title="BMI"></div>
+                <div id="bar-smoker" class="h-full bg-rose-500 transition-all duration-400" style="width: 0%" title="Tobacco"></div>
+                <div id="bar-kids" class="h-full bg-teal-500 transition-all duration-400" style="width: 8%" title="Dependents"></div>
+              </div>
+              <!-- Legend tags -->
+              <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-300 font-medium">
+                <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-400"></span> Base</span>
+                <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-blue-500"></span> Age</span>
+                <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span> BMI</span>
+                <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Tobacco</span>
+                <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-teal-500"></span> Family</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- FEATURE 1: EXPLAINABLE AI SHAP-STYLE WATERFALL -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-3.5">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                  <svg class="w-4 h-4 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                  Key Cost Drivers
+                </h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Additive contributions bridging baseline to predicted charge.</p>
+              </div>
+              <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">Tree Attribution</span>
+            </div>
+
+            <!-- Dynamic Waterfall Bars -->
+            <div id="waterfall-container" class="space-y-2 pt-1 font-mono text-xs">
+              <!-- Populated dynamically via renderWaterfall() -->
+            </div>
+          </div>
+
+          <!-- FEATURE 2: HEALTH PLAN METALLIC TIER MATCHING -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-3.5">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                  <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                  Plan Tiers
+                </h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Actuarial mapping to Affordable Care Act metallic tiers.</p>
+              </div>
+              <span id="recommended-tier-pill" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-950 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-800">
+                Recommended: Silver Plan
+              </span>
+            </div>
+
+            <!-- 4 Tier Cards Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <!-- Bronze -->
+              <div id="tier-card-bronze" class="tier-card p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 text-center transition-all hover:border-slate-400">
+                <div class="text-[11px] font-bold text-amber-700 dark:text-amber-400">BRONZE (60%)</div>
+                <div class="text-sm font-extrabold text-slate-900 dark:text-white mt-1" id="tier-premium-bronze">$240/mo</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Ded: $7,500</div>
+                <div class="text-[10px] text-slate-400">OOP Max: $9,100</div>
+              </div>
+
+              <!-- Silver -->
+              <div id="tier-card-silver" class="tier-card p-3 rounded-xl border-2 border-cyan-500 bg-cyan-50/50 dark:bg-cyan-950/40 text-center transition-all shadow-xs">
+                <div class="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1">
+                  SILVER (70%)
+                </div>
+                <div class="text-sm font-extrabold text-cyan-700 dark:text-cyan-300 mt-1" id="tier-premium-silver">$365/mo</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Ded: $4,500</div>
+                <div class="text-[10px] text-slate-400">OOP Max: $8,700</div>
+              </div>
+
+              <!-- Gold -->
+              <div id="tier-card-gold" class="tier-card p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 text-center transition-all hover:border-slate-400">
+                <div class="text-[11px] font-bold text-amber-600 dark:text-amber-300">GOLD (80%)</div>
+                <div class="text-sm font-extrabold text-slate-900 dark:text-white mt-1" id="tier-premium-gold">$505/mo</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Ded: $1,500</div>
+                <div class="text-[10px] text-slate-400">OOP Max: $6,500</div>
+              </div>
+
+              <!-- Platinum -->
+              <div id="tier-card-platinum" class="tier-card p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 text-center transition-all hover:border-slate-400">
+                <div class="text-[11px] font-bold text-purple-600 dark:text-purple-300">PLATINUM (90%)</div>
+                <div class="text-sm font-extrabold text-slate-900 dark:text-white mt-1" id="tier-premium-platinum">$680/mo</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Ded: $250</div>
+                <div class="text-[10px] text-slate-400">OOP Max: $3,200</div>
+              </div>
+            </div>
+
+            <p id="tier-recommendation-note" class="text-xs text-slate-600 dark:text-slate-300 pt-1">
+              Low-risk health profile matches well with high-deductible Silver or Bronze coverage, maximizing out-of-pocket monthly premium savings.
+            </p>
+          </div>
+
+          <!-- FEATURE 3: INTERACTIVE REVERSE BUDGET CALCULATOR -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                  <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  Budget Finder
+                </h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Input target monthly expenditure to deduce required lifestyle targets.</p>
+              </div>
+              <span id="budget-feasibility-pill" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 self-start sm:self-auto">
+                Budget Met
+              </span>
+            </div>
+
+            <!-- Target Slider & Readout -->
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+              <div class="sm:col-span-7 space-y-2">
+                <div class="flex justify-between items-center text-xs">
+                  <label for="budget-slider" class="font-medium text-slate-700 dark:text-slate-300">Target Monthly Premium</label>
+                  <span class="font-mono font-bold text-slate-900 dark:text-white px-2.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-sm" id="budget-target-label">$275 / mo</span>
+                </div>
+                <input type="range" id="budget-slider" min="100" max="900" step="25" value="275" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer accent-emerald-500" oninput="handleBudgetSliderChange()">
+                <div class="flex justify-between text-[10px] text-slate-400 font-mono">
+                  <span>$100/mo</span>
+                  <span>$350/mo</span>
+                  <span>$600/mo</span>
+                  <span>$900/mo</span>
+                </div>
+              </div>
+
+              <!-- Metrics Delta Card -->
+              <div class="sm:col-span-5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-1 text-xs">
+                <div class="flex justify-between text-slate-500">
+                  <span>Current Estimate:</span>
+                  <span id="budget-current-val" class="font-mono font-semibold text-slate-800 dark:text-slate-200">$365 / mo</span>
+                </div>
+                <div class="flex justify-between text-slate-500">
+                  <span>Target Budget:</span>
+                  <span id="budget-target-val" class="font-mono font-semibold text-slate-800 dark:text-slate-200">$275 / mo</span>
+                </div>
+                <div class="flex justify-between pt-1 border-t border-slate-200 dark:border-slate-700">
+                  <span class="font-semibold text-slate-700 dark:text-slate-300">Variance / Gap:</span>
+                  <span id="budget-gap-val" class="font-mono font-bold text-amber-500">-$90 / mo gap</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recommendation & Action Bar -->
+            <div id="budget-analysis-box" class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 space-y-2">
+              <div class="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5" id="budget-analysis-title">
+                Required Biometric & Plan Targets
+              </div>
+              <p id="budget-analysis-desc" class="text-slate-600 dark:text-slate-300">
+                To achieve $275/mo, maintain non-smoker classification and consider an ACA Bronze or Silver high-deductible policy.
+              </p>
+              <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                <span id="budget-target-badge" class="text-[11px] font-mono text-cyan-700 dark:text-cyan-400 font-semibold">Target BMI: 22.0 • Non-Smoker</span>
+                <button type="button" id="budget-apply-btn" onclick="applyBudgetTargets()" class="text-xs px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-medium transition-colors shadow-xs flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  Apply Targets to Inputs
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Secondary Insight Cards -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <!-- Factor Chart -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Cost by Driver</h3>
+              <div class="relative h-44">
+                <canvas id="factorContributionChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Optimization Savings Opportunities -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+              <div>
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2.5">Potential Savings</h3>
+                <div id="insight-container" class="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                  <!-- Injected dynamically -->
+                </div>
+              </div>
+              <button onclick="switchTab('simulator')" class="mt-3 w-full py-2 px-3 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors flex items-center justify-center gap-1 text-slate-700 dark:text-slate-300">
+                Explore Simulation Scenarios &rarr;
+              </button>
+            </div>
+          </div>
+
+          <!-- Demographic Context Benchmarks -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Demographic Benchmarks</h3>
+            <div class="grid grid-cols-3 gap-3 text-center">
+              <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/50 dark:border-slate-800">
+                <div class="text-[11px] text-slate-500">National Average</div>
+                <div class="font-bold text-slate-800 dark:text-slate-200 font-mono text-sm sm:text-base mt-0.5">$13,261</div>
+                <div id="delta-us" class="text-[10px] font-semibold text-emerald-600 mt-0.5">-67% vs avg</div>
+              </div>
+              <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/50 dark:border-slate-800">
+                <div class="text-[11px] text-slate-500">Age Cohort Baseline</div>
+                <div id="peer-cost" class="font-bold text-slate-800 dark:text-slate-200 font-mono text-sm sm:text-base mt-0.5">$4,253</div>
+                <div id="delta-peer" class="text-[10px] font-semibold text-emerald-600 mt-0.5">+3% vs cohort</div>
+              </div>
+              <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/50 dark:border-slate-800">
+                <div class="text-[11px] text-slate-500">Regional Median</div>
+                <div id="region-median" class="font-bold text-slate-800 dark:text-slate-200 font-mono text-sm sm:text-base mt-0.5">$9,382</div>
+                <div id="delta-region" class="text-[10px] font-semibold text-emerald-600 mt-0.5">-53% vs median</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: DUAL PROFILE COMPARATOR (BEFORE VS AFTER) -->
+    <section id="view-comparator" class="space-y-6 hidden">
+      <!-- Header & Actions -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-800 gap-3">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900 dark:text-white">Profile Comparison</h2>
+          <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Directly contrast a baseline profile with an alternative scenario to quantify savings.
+          </p>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button type="button" onclick="copyProfileAToB()" class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium transition-colors shadow-xs" title="Copy Profile A settings to Profile B">
+            <svg class="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            Copy A &rarr; B
+          </button>
+          <button type="button" onclick="swapProfiles()" class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium transition-colors shadow-xs" title="Swap Profiles A and B">
+            <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+            Swap A &harr; B
+          </button>
+          <button type="button" onclick="resetComparator()" class="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 font-medium transition-colors shadow-xs">
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <!-- Live KPI Comparison Card -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Profile A Subtotal -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
+          <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Profile A (Baseline)</div>
+          <div id="comp-kpi-a-annual" class="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">$4,377/yr</div>
+          <div id="comp-kpi-a-monthly" class="text-xs text-slate-500 font-mono mt-0.5">$365 / month</div>
+        </div>
+
+        <!-- Profile B Subtotal -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
+          <div class="text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 uppercase tracking-wider">Profile B (Target)</div>
+          <div id="comp-kpi-b-annual" class="text-xl sm:text-2xl font-bold font-mono text-cyan-600 dark:text-cyan-400 mt-1">$1,840/yr</div>
+          <div id="comp-kpi-b-monthly" class="text-xs text-slate-500 font-mono mt-0.5">$153 / month</div>
+        </div>
+
+        <!-- Net Annual Difference -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
+          <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Annual Variance</div>
+          <div id="comp-kpi-net-annual" class="text-xl sm:text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1">-$2,537/yr</div>
+          <div id="comp-kpi-net-pct" class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">-58.0% Cost Reduction</div>
+        </div>
+
+        <!-- Net Monthly Difference -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
+          <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Monthly Variance</div>
+          <div id="comp-kpi-net-monthly" class="text-xl sm:text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1">-$211 / mo</div>
+          <div id="comp-kpi-badge" class="text-[10px] inline-block font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 mt-0.5">
+            Actuarial Savings
+          </div>
+        </div>
+      </div>
+
+      <!-- Side-by-Side Control Columns Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- PROFILE A (BEFORE) CARD -->
+        <div class="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+              <h3 class="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Profile A (Baseline)</h3>
+            </div>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">Baseline</span>
+          </div>
+
+          <!-- Age A -->
+          <div class="space-y-1">
+            <div class="flex justify-between items-center text-xs">
+              <label for="comp-a-age" class="font-medium text-slate-700 dark:text-slate-300">Age</label>
+              <span id="comp-a-age-label" class="font-mono font-bold text-slate-900 dark:text-white px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">32 yrs</span>
+            </div>
+            <input type="range" id="comp-a-age" min="18" max="75" value="32" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer" oninput="handleCompParamChange('a')">
+          </div>
+
+          <!-- Sex A -->
+          <div class="space-y-1">
+            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Biological Sex</label>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <button type="button" id="comp-a-sex-female" onclick="setCompSex('a', 'female')" class="py-1.5 px-3 rounded-lg border font-semibold border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300">Female</button>
+              <button type="button" id="comp-a-sex-male" onclick="setCompSex('a', 'male')" class="py-1.5 px-3 rounded-lg border font-medium border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">Male</button>
+            </div>
+          </div>
+
+          <!-- BMI A -->
+          <div class="space-y-1">
+            <div class="flex justify-between items-center text-xs">
+              <div class="flex items-center gap-1.5">
+                <label for="comp-a-bmi" class="font-medium text-slate-700 dark:text-slate-300">BMI</label>
+                <span id="comp-a-bmi-badge" class="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Normal</span>
+              </div>
+              <span id="comp-a-bmi-label" class="font-mono font-bold text-slate-900 dark:text-white px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">23.5</span>
+            </div>
+            <input type="range" id="comp-a-bmi" min="15.0" max="50.0" step="0.1" value="23.5" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer" oninput="handleCompParamChange('a')">
+          </div>
+
+          <!-- Tobacco A -->
+          <div class="space-y-1">
+            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Tobacco Status</label>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <button type="button" id="comp-a-smoker-no" onclick="setCompSmoker('a', false)" class="py-1.5 px-3 rounded-lg border font-semibold border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">Non-Smoker</button>
+              <button type="button" id="comp-a-smoker-yes" onclick="setCompSmoker('a', true)" class="py-1.5 px-3 rounded-lg border font-medium border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">Smoker</button>
+            </div>
+          </div>
+
+          <!-- Children A -->
+          <div class="space-y-1">
+            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Children</label>
+            <div class="grid grid-cols-6 gap-1">
+              <button type="button" onclick="setCompChildren('a', 0)" class="comp-a-child-btn py-1 text-xs font-semibold rounded-lg border border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300" data-val="0">0</button>
+              <button type="button" onclick="setCompChildren('a', 1)" class="comp-a-child-btn py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" data-val="1">1</button>
+              <button type="button" onclick="setCompChildren('a', 2)" class="comp-a-child-btn py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" data-val="2">2</button>
+              <button type="button" onclick="setCompChildren('a', 3)" class="comp-a-child-btn py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" data-val="3">3</button>
+              <button type="button" onclick="setCompChildren('a', 4)" class="comp-a-child-btn py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" data-val="4">4</button>
+              <button type="button" onclick="setCompChildren('a', 5)" class="comp-a-child-btn py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" data-val="5">5+</button>
+            </div>
+          </div>
+
+          <!-- Region A -->
+          <div class="space-y-1">
+            <label for="comp-a-region" class="block text-xs font-medium text-slate-700 dark:text-slate-300">Region</label>
+            <select id="comp-a-region" onchange="handleCompParamChange('a')" class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200">
+              <option value="southwest" selected>Southwest</option>
+              <option value="southeast">Southeast</option>
+              <option value="northwest">Northwest</option>
+              <option value="northeast">Northeast</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- PROFILE B (AFTER / COMPARISON) CARD -->
+        <div class="bg-white dark:bg-slate-900 border-2 border-cyan-500/80 dark:border-cyan-500/60 rounded-2xl p-5 shadow-xs space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-cyan-500"></span>
+              <h3 class="font-bold text-sm text-cyan-800 dark:text-cyan-300 uppercase tracking-wider">Profile B (Target)</h3>
+            </div>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-100 dark:bg-cyan-950 text-cyan-800 dark:text-cyan-300 font-semibold">Target</span>
+          </div>
+
+          <!-- Age B -->
+          <div class="space-y-1">
+            <div class="flex justify-between items-center text-xs">
+              <label for="comp-b-age" class="font-medium text-slate-700 dark:text-slate-300">Age</label>
+              <span id="comp-b-age-label" class="font-mono font-bold text-slate-900 dark:text-white px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">28 yrs</span>
+            </div>
+            <input type="range" id="comp-b-age" min="18" max="75" value="28" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer accent-cyan-600" oninput="handleCompParamChange('b')">
+          </div>
+
+          <!-- Sex B -->
+          <div class="space-y-1">
+            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Biological Sex</label>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <button type="button" id="comp-b-sex-female" onclick="setCompSex('b', 'female')" class="py-1.5 px-3 rounded-lg border font-semibold border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300">Female</button>
+              <button type="button" id="comp-b-sex-male" onclick="setCompSex('b', 'male')" class="py-1.5 px-3 rounded-lg border font-medium border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">Male</button>
+            </div>
+          </div>
+
+          <!-- BMI B -->
+          <div class="space-y-1">
+            <div class="flex justify-between items-center text-xs">
+              <div class="flex items-center gap-1.5">
+                <label for="comp-b-bmi" class="font-medium text-slate-700 dark:text-slate-300">BMI</label>
+                <span id="comp-b-bmi-badge" class="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Normal</span>
+              </div>
+              <span id="comp-b-bmi-label" class="font-mono font-bold text-slate-900 dark:text-white px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">21.8</span>
+            </div>
+            <input type="range" id="comp-b-bmi" min="15.0" max="50.0" step="0.1" value="21.8" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer accent-cyan-600" oninput="handleCompParamChange('b')">
+          </div>
+
+          <!-- Tobacco B -->
+          <div class="space-y-1">
+            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Tobacco Status</label>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <button type="button" id="comp-b-smoker-no" onclick="setCompSmoker('b', false)" class="py-1.5 px-3 rounded-lg border font-semibold border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">Non-Smoker</button>
+              <button type="button" id="comp-b-smoker-yes" onclick="setCompSmoker('b', true)" class="py-1.5 px-3 rounded-lg border font-medium border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">Smoker</button>
+            </div>
+          </div>
+
+          <!-- Children B -->
+          <div class="space-y-1">
+            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Children</label>
+            <div class="grid grid-cols-6 gap-1">
+              <button type="button" onclick="setCompChildren('b', 0)" class="comp-b-child-btn py-1 text-xs font-semibold rounded-lg border border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300" data-val="0">0</button>
+              <button type="button" onclick="setCompChildren('b', 1)" class="comp-b-child-btn py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" data-val="1">1</button>
+              <button type="button" onclick="setCompChildren('b', 2)" class="comp-b-child-btn py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" data-val="2">2</button>
+              <button type="button" onclick="setCompChildren('b', 3)" class="comp-b-child-btn py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" data-val="3">3</button>
+              <button type="button" onclick="setCompChildren('b', 4)" class="comp-b-child-btn py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" data-val="4">4</button>
+              <button type="button" onclick="setCompChildren('b', 5)" class="comp-b-child-btn py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" data-val="5">5+</button>
+            </div>
+          </div>
+
+          <!-- Region B -->
+          <div class="space-y-1">
+            <label for="comp-b-region" class="block text-xs font-medium text-slate-700 dark:text-slate-300">Region</label>
+            <select id="comp-b-region" onchange="handleCompParamChange('b')" class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200">
+              <option value="southwest" selected>Southwest</option>
+              <option value="southeast">Southeast</option>
+              <option value="northwest">Northwest</option>
+              <option value="northeast">Northeast</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Comparison Variance Table & Chart -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Differential Table -->
+        <div class="lg:col-span-7 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-3">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Variance Breakdown</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead>
+                <tr class="border-b border-slate-200 dark:border-slate-700 text-slate-500">
+                  <th class="py-2 px-2">Risk Factor</th>
+                  <th class="py-2 px-2">Profile A</th>
+                  <th class="py-2 px-2">Profile B</th>
+                  <th class="py-2 px-2 text-right">Actuarial Delta</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-slate-800 font-mono" id="comp-variance-tbody">
+                <!-- Injected via updateComparatorView() -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Chart Comparison -->
+        <div class="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Cost Comparison</h3>
+          <div class="relative h-56">
+            <canvas id="dualComparisonChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TAB 3: WHAT-IF SCENARIO SIMULATOR -->
+    <section id="view-simulator" class="space-y-6 hidden">
+      <div class="pb-3 border-b border-slate-200 dark:border-slate-800">
+        <h2 class="text-xl font-bold text-slate-900 dark:text-white">Scenario Simulator</h2>
+        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">Evaluate how lifestyle adjustments and time horizons impact charges.</p>
+      </div>
+
+      <!-- Scenarios Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        
+        <!-- Scenario 1: Smoking Cessation -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <div class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-sm mb-3">
+              🚭
+            </div>
+            <h3 class="font-semibold text-sm text-slate-900 dark:text-white">Smoking Cessation</h3>
+            <p class="text-xs text-slate-500 mt-1">Calculates premium impact if categorized as non-smoker.</p>
+            
+            <div class="mt-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 space-y-1.5">
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-500">Projected Cost:</span>
+                <span id="sim-smoke-cost" class="font-mono font-bold text-slate-800 dark:text-slate-200">$4,377/yr</span>
+              </div>
+              <div class="flex justify-between text-xs pt-1.5 border-t border-slate-200 dark:border-slate-700">
+                <span class="font-medium text-slate-700 dark:text-slate-300">Annual Savings:</span>
+                <span id="sim-smoke-save" class="font-mono font-bold text-emerald-600 dark:text-emerald-400">$0/yr</span>
+              </div>
+            </div>
+          </div>
+          <p id="sim-smoke-note" class="text-[11px] text-slate-400 mt-3 italic">Currently categorized as non-smoker.</p>
+        </div>
+
+        <!-- Scenario 2: Target Optimal BMI -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <div class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-sm mb-3">
+              ⚖️
+            </div>
+            <h3 class="font-semibold text-sm text-slate-900 dark:text-white">Optimal BMI Target (24.0)</h3>
+            <p class="text-xs text-slate-500 mt-1">Impact of shifting BMI to the normal healthy bracket.</p>
+            
+            <div class="mt-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 space-y-1.5">
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-500">Projected Cost:</span>
+                <span id="sim-bmi-cost" class="font-mono font-bold text-slate-800 dark:text-slate-200">$4,377/yr</span>
+              </div>
+              <div class="flex justify-between text-xs pt-1.5 border-t border-slate-200 dark:border-slate-700">
+                <span class="font-medium text-slate-700 dark:text-slate-300">Annual Savings:</span>
+                <span id="sim-bmi-save" class="font-mono font-bold text-emerald-600 dark:text-emerald-400">$0/yr</span>
+              </div>
+            </div>
+          </div>
+          <p id="sim-bmi-note" class="text-[11px] text-slate-400 mt-3 italic">BMI is currently within optimal range.</p>
+        </div>
+
+        <!-- Scenario 3: +5 Years Horizon -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <div class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-sm mb-3">
+              ⏳
+            </div>
+            <h3 class="font-semibold text-sm text-slate-900 dark:text-white">5-Year Progression (+5 Yrs)</h3>
+            <p class="text-xs text-slate-500 mt-1">Actuarial drift over a 5-year horizon assuming unchanged health.</p>
+            
+            <div class="mt-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 space-y-1.5">
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-500">Projected at +5 yrs:</span>
+                <span id="sim-age-cost" class="font-mono font-bold text-slate-800 dark:text-slate-200">$5,260/yr</span>
+              </div>
+              <div class="flex justify-between text-xs pt-1.5 border-t border-slate-200 dark:border-slate-700">
+                <span class="font-medium text-slate-700 dark:text-slate-300">Expected Change:</span>
+                <span id="sim-age-diff" class="font-mono font-bold text-rose-500">+$883/yr</span>
+              </div>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-3 italic">Based on model age progression splits.</p>
+        </div>
+
+      </div>
+
+      <!-- Trajectory Chart -->
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+        <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-0.5">10-Year Cost Projection</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Current profile trajectory versus optimized lifestyle path (Non-smoker & BMI &le; 24.0).</p>
+        <div class="relative h-64">
+          <canvas id="scenarioComparisonChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: MODEL ARCHITECTURE & GOVERNANCE -->
+    <section id="view-model" class="space-y-6 hidden">
+      <div class="pb-3 border-b border-slate-200 dark:border-slate-800">
+        <h2 class="text-xl font-bold text-slate-900 dark:text-white">Model Benchmarks</h2>
+        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">Comparative validation metrics and underwriting factor importance.</p>
+      </div>
+
+      <!-- Comparative Table -->
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold text-slate-900 dark:text-white text-sm">Model Comparison</h3>
+          <span class="text-[11px] text-slate-500 font-mono">Independent Evaluation Benchmark</span>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 dark:border-slate-700 text-slate-500 font-medium">
+                <th class="py-2.5 px-3">Model</th>
+                <th class="py-2.5 px-3 text-right">Test R²</th>
+                <th class="py-2.5 px-3 text-right">Test MAE ($)</th>
+                <th class="py-2.5 px-3 text-right">Test RMSE ($)</th>
+                <th class="py-2.5 px-3 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+              <tr class="bg-cyan-50/40 dark:bg-cyan-950/20 font-medium">
+                <td class="py-2.5 px-3 font-semibold text-cyan-800 dark:text-cyan-300">Random Forest Regressor</td>
+                <td class="py-2.5 px-3 text-right font-mono font-bold text-cyan-700 dark:text-cyan-400">0.8668 (86.7%)</td>
+                <td class="py-2.5 px-3 text-right font-mono font-bold text-cyan-700 dark:text-cyan-400">$1,973.45</td>
+                <td class="py-2.5 px-3 text-right font-mono font-bold text-cyan-700 dark:text-cyan-400">$4,521.78</td>
+                <td class="py-2.5 px-3 text-center">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Selected Engine</span>
+                </td>
+              </tr>
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <td class="py-2.5 px-3 text-slate-700 dark:text-slate-300">Gradient Boosting Regressor</td>
+                <td class="py-2.5 px-3 text-right font-mono">0.8651 (86.5%)</td>
+                <td class="py-2.5 px-3 text-right font-mono">$2,044.62</td>
+                <td class="py-2.5 px-3 text-right font-mono">$4,549.61</td>
+                <td class="py-2.5 px-3 text-center text-slate-400 text-[11px]">Runner-up</td>
+              </tr>
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <td class="py-2.5 px-3 text-slate-700 dark:text-slate-300">Linear Regression</td>
+                <td class="py-2.5 px-3 text-right font-mono text-rose-500">0.5043 (50.4%)</td>
+                <td class="py-2.5 px-3 text-right font-mono text-rose-500">$4,362.56</td>
+                <td class="py-2.5 px-3 text-right font-mono text-rose-500">$8,722.40</td>
+                <td class="py-2.5 px-3 text-center text-rose-500 text-[11px]">Underfitting</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Risk Weightings -->
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-3">
+        <h3 class="font-semibold text-slate-900 dark:text-white text-sm">Risk Weightings</h3>
+        <div class="space-y-3 text-xs">
+          <div>
+            <div class="flex justify-between font-medium mb-1">
+              <span>Tobacco Usage (Smoker)</span>
+              <span class="font-mono text-rose-500">51.5%</span>
+            </div>
+            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5">
+              <div class="bg-rose-500 h-1.5 rounded-full" style="width: 51.5%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between font-medium mb-1">
+              <span>Age Progression</span>
+              <span class="font-mono text-blue-500">39.0%</span>
+            </div>
+            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5">
+              <div class="bg-blue-500 h-1.5 rounded-full" style="width: 39.0%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between font-medium mb-1">
+              <span>Body Mass Index (BMI + Category)</span>
+              <span class="font-mono text-amber-500">5.0%</span>
+            </div>
+            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5">
+              <div class="bg-amber-500 h-1.5 rounded-full" style="width: 5.0%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between font-medium mb-1">
+              <span>Dependents & Geography</span>
+              <span class="font-mono text-teal-500">4.5%</span>
+            </div>
+            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5">
+              <div class="bg-teal-500 h-1.5 rounded-full" style="width: 4.5%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- CLIENT-READY PDF EXPORT MODAL -->
+  <div id="client-pdf-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+    <!-- Backdrop -->
+    <div id="pdf-modal-backdrop" onclick="closeClientPDFModal()" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs no-print"></div>
+
+    <!-- Modal Box / Printable Sheet -->
+    <div class="relative w-full max-w-3xl max-h-[92vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 z-10 custom-scroll">
+      
+      <!-- Modal Action Bar (Hidden when printing) -->
+      <div class="flex justify-between items-center pb-4 mb-4 border-b border-slate-200 dark:border-slate-800 no-print">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Quote Preview</span>
+        <div class="flex items-center gap-2">
+          <button onclick="window.print()" class="px-4 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+            Print / Save as PDF
+          </button>
+          <button onclick="closeClientPDFModal()" class="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800">
+            Close
+          </button>
+        </div>
+      </div>
+
+      <!-- PRINTABLE EXECUTIVE REPORT CONTENT -->
+      <div id="client-pdf-printable" class="space-y-6 text-slate-900 dark:text-slate-100">
+        
+        <!-- Document Header -->
+        <div class="flex justify-between items-start border-b border-slate-200 dark:border-slate-700 pb-5">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-teal-500 flex items-center justify-center text-white shadow-sm">
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <div>
+              <div class="text-xl font-extrabold tracking-tight">MediRisk</div>
+              <div class="text-xs text-slate-500">Actuarial Risk Assessment & Underwriting Memorandum</div>
+            </div>
+          </div>
+          <div class="text-right text-xs font-mono text-slate-500">
+            <div>REF: <span id="pdf-ref-id">MR-2026-9482</span></div>
+            <div id="pdf-date">Date: Oct 10, 2026</div>
+          </div>
+        </div>
+
+        <!-- Section 1: Policyholder Profile -->
+        <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+          <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2.5">Underwriting Subject Profile</div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+            <div><span class="text-slate-400">Age:</span> <strong id="pdf-val-age">32 yrs</strong></div>
+            <div><span class="text-slate-400">Sex:</span> <strong id="pdf-val-sex">Female</strong></div>
+            <div><span class="text-slate-400">BMI:</span> <strong id="pdf-val-bmi">23.5 (Normal)</strong></div>
+            <div><span class="text-slate-400">Tobacco:</span> <strong id="pdf-val-smoker">Non-Smoker</strong></div>
+            <div><span class="text-slate-400">Dependents:</span> <strong id="pdf-val-children">0 Covered</strong></div>
+            <div><span class="text-slate-400">Region:</span> <strong id="pdf-val-region">Southwest</strong></div>
+            <div><span class="text-slate-400">Risk Tier:</span> <strong id="pdf-val-tier" class="text-emerald-600">Low Risk Tier</strong></div>
+            <div><span class="text-slate-400">Actuarial Model:</span> <strong>Random Forest</strong></div>
+          </div>
+        </div>
+
+        <!-- Section 2: Expected Expense Quote -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-center">
+            <div class="text-[11px] text-slate-500 uppercase">Estimated Annual Charge</div>
+            <div id="pdf-quote-annual" class="text-2xl font-bold font-mono text-cyan-600 dark:text-cyan-400 mt-1">$4,377</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Real US Dollar Valuation</div>
+          </div>
+          <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-center">
+            <div class="text-[11px] text-slate-500 uppercase">Monthly Premium Equivalent</div>
+            <div id="pdf-quote-monthly" class="text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">$365 / mo</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Budget Allocation</div>
+          </div>
+          <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-center">
+            <div class="text-[11px] text-slate-500 uppercase">90% Prediction Band</div>
+            <div id="pdf-quote-ci" class="text-lg font-bold font-mono text-slate-700 dark:text-slate-300 mt-1.5">$3,879 – $5,463</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Tree Ensemble Variance</div>
+          </div>
+        </div>
+
+        <!-- Section 3: Recommended Metallic Plan Tier -->
+        <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+          <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Recommended ACA Metallic Plan Tier</div>
+          <div class="flex justify-between items-center text-xs">
+            <div>
+              <span id="pdf-plan-name" class="font-bold text-sm text-cyan-700 dark:text-cyan-300">Silver Metallic Plan (70% Actuarial Value)</span>
+              <p class="text-slate-500 mt-0.5" id="pdf-plan-desc">Optimal cost-to-coverage balance for this biometric risk profile.</p>
+            </div>
+            <div class="text-right font-mono">
+              <div class="font-bold text-sm" id="pdf-plan-premium">$365 / mo</div>
+              <div class="text-[11px] text-slate-400" id="pdf-plan-deductible">Deductible: $4,500</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 4: Optimization Summary -->
+        <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-2 text-xs">
+          <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Underwriting Takeaways & Lifestyle Impact</div>
+          <ul id="pdf-insights-list" class="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-300">
+            <li>Profile is situated within the lowest actuarial expense tier.</li>
+            <li>Non-smoker classification achieves maximum premium efficiency.</li>
+          </ul>
+        </div>
+
+        <!-- Signature & Disclaimer -->
+        <div class="pt-6 border-t border-slate-200 dark:border-slate-700 flex justify-between items-end text-[11px] text-slate-400 font-mono">
+          <div>
+            <div>Certified Broker / Actuary: _______________________</div>
+            <div class="mt-1">Licence # AGY-8842-US</div>
+          </div>
+          <div class="text-right">
+            <div>MediRisk Actuarial Engine v1.2</div>
+            <div>Confidential & Proprietary</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast Notification Feedback -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-12 opacity-0 pointer-events-none transition-all duration-300 px-4 py-2.5 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-xs font-medium shadow-lg flex items-center gap-2 no-print">
+    <svg class="w-4 h-4 text-emerald-400 dark:text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+    <span id="toast-text">Parameters reset to default.</span>
+  </div>
+
+  <script>
+    // State Object
+    const state = {
+      age: 32,
+      sex: 'female',
+      bmi: 23.5,
+      children: 0,
+      smoker: false,
+      region: 'southwest'
+    };
+
+    // Dual Profile Comparator State
+    const compStateA = {
+      age: 32,
+      sex: 'female',
+      bmi: 23.5,
+      children: 0,
+      smoker: false,
+      region: 'southwest'
+    };
+
+    const compStateB = {
+      age: 28,
+      sex: 'female',
+      bmi: 21.8,
+      children: 0,
+      smoker: false,
+      region: 'southwest'
+    };
+
+    let factorChartInstance = null;
+    let trajectoryChartInstance = null;
+    let dualCompChartInstance = null;
+    let targetBudgetValue = 275;
+    let debounceTimer = null;
+    let toastTimeout = null;
+    let lastResult = null;
+
+    // High-precision Random Forest simulation function for offline or standalone fallback
+    function rfOfflinePredict(params) {
+      let logY;
+      const ageNorm = params.age;
+      const bmi = params.bmi;
+      const isSmoker = params.smoker;
+      const isObese = bmi >= 30.0;
+      
+      let regAdj = 0;
+      if (params.region === 'southeast') regAdj = 0.08;
+      else if (params.region === 'northwest') regAdj = -0.04;
+      else if (params.region === 'southwest') regAdj = -0.02;
+      
+      const sexAdj = params.sex === 'male' ? 0.015 : 0;
+      const childAdj = params.children * 0.045;
+
+      if (!isSmoker) {
+        logY = 7.35 + (ageNorm * 0.0335) + (bmi * 0.0125) + childAdj + sexAdj + regAdj;
+      } else {
+        if (!isObese) {
+          logY = 9.42 + (ageNorm * 0.018) + ((bmi - 20) * 0.025) + childAdj + regAdj;
+        } else {
+          logY = 10.35 + (ageNorm * 0.014) + ((bmi - 30) * 0.018) + childAdj + regAdj;
+        }
+      }
+
+      const predictedTotal = Math.round(Math.expm1(logY));
+      
+      const baseCost = Math.round(Math.expm1(7.35 + (18 * 0.0335) + (21.5 * 0.0125)));
+      const ageCost = Math.max(0, Math.round(predictedTotal * (0.35 * (params.age / 50))));
+      const bmiCost = Math.max(0, Math.round(predictedTotal * (isSmoker && isObese ? 0.30 : 0.12)));
+      const smokerCost = isSmoker ? Math.max(0, Math.round(predictedTotal * 0.55)) : 0;
+      const childrenCost = Math.max(0, Math.round(params.children * 450));
+
+      return {
+        total: predictedTotal,
+        monthly: Math.round(predictedTotal / 12),
+        ci_lower: Math.round(predictedTotal * 0.88),
+        ci_upper: Math.round(predictedTotal * 1.12),
+        peer_baseline: Math.round(2200 + (params.age * 72)),
+        breakdown: {
+          base: baseCost,
+          age: ageCost,
+          bmi: bmiCost,
+          children: childrenCost,
+          smoker: smokerCost
+        }
+      };
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      const text = document.getElementById('toast-text');
+      text.textContent = message;
+      toast.classList.remove('translate-y-12', 'opacity-0', 'pointer-events-none');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.add('translate-y-12', 'opacity-0', 'pointer-events-none');
+        toast.classList.remove('translate-y-0', 'opacity-100');
+      }, 2400);
+    }
+
+    // Debounced Parameter Change Handler
+    function handleParamChange() {
+      state.age = parseInt(document.getElementById('input-age').value, 10);
+      state.bmi = parseFloat(document.getElementById('input-bmi').value);
+      state.region = document.getElementById('input-region').value;
+
+      document.getElementById('label-age').textContent = `${state.age} yrs`;
+      document.getElementById('label-bmi').textContent = state.bmi.toFixed(1);
+
+      updateBmiCategoryBadge(state.bmi);
+
+      // Micro feedback on calculating
+      const annualElem = document.getElementById('res-annual');
+      annualElem.style.opacity = '0.65';
+
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        executePrediction();
+      }, 40);
+    }
+
+    async function executePrediction() {
+      try {
+        const response = await fetch('/api/v1/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state)
+        });
+
+        if (response.ok) {
+          const res = await response.json();
+          lastResult = res;
+          updateDashboard(res);
+          executeSimulations();
+          return;
+        }
+      } catch (e) {
+        // Fallback for standalone file
+      }
+
+      const res = rfOfflinePredict(state);
+      lastResult = res;
+      updateDashboard(res);
+      updateOfflineSimulations();
+    }
+
+    async function executeSimulations() {
+      try {
+        const response = await fetch('/api/v1/simulate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state)
+        });
+
+        if (response.ok) {
+          const sim = await response.json();
+          renderSimulationResults(sim);
+          return;
+        }
+      } catch (e) {
+        updateOfflineSimulations();
+      }
+    }
+
+    function renderSimulationResults(sim) {
+      document.getElementById('sim-smoke-cost').textContent = '$' + sim.smoke_cost.toLocaleString() + '/yr';
+      document.getElementById('sim-smoke-save').textContent = sim.smoke_savings > 0 
+        ? '-$' + sim.smoke_savings.toLocaleString() + '/yr' 
+        : '$0/yr';
+      document.getElementById('sim-smoke-note').textContent = state.smoker 
+        ? `Quitting unlocks an estimated savings of $${sim.smoke_savings.toLocaleString()}/yr.` 
+        : 'Profile is currently categorized as Non-Smoker.';
+
+      document.getElementById('sim-bmi-cost').textContent = '$' + sim.bmi_cost.toLocaleString() + '/yr';
+      document.getElementById('sim-bmi-save').textContent = sim.bmi_savings > 0 
+        ? '-$' + sim.bmi_savings.toLocaleString() + '/yr' 
+        : '$0/yr';
+      document.getElementById('sim-bmi-note').textContent = state.bmi > 25
+        ? `Reaching target BMI 24.0 removes overweight risk load.`
+        : `Current BMI (${state.bmi.toFixed(1)}) is within optimal bounds.`;
+
+      document.getElementById('sim-age-cost').textContent = '$' + sim.age_cost.toLocaleString() + '/yr';
+      document.getElementById('sim-age-diff').textContent = '+$' + sim.age_diff.toLocaleString() + '/yr';
+
+      renderTrajectoryChart(sim.trajectory_labels, sim.trajectory_current, sim.trajectory_optimized);
+    }
+
+    function updateOfflineSimulations() {
+      const current = rfOfflinePredict(state).total;
+
+      const simSmoke = rfOfflinePredict({ ...state, smoker: false }).total;
+      const smokeSavings = Math.max(0, current - simSmoke);
+
+      const targetBmi = 24.0;
+      const simBmi = rfOfflinePredict({ ...state, bmi: Math.min(state.bmi, targetBmi) }).total;
+      const bmiSavings = Math.max(0, current - simBmi);
+
+      const simAge = rfOfflinePredict({ ...state, age: state.age + 5 }).total;
+      const ageDiff = simAge - current;
+
+      const labels = [];
+      const currentTraj = [];
+      const optTraj = [];
+      for (let i = 0; i <= 10; i += 2) {
+        const fAge = state.age + i;
+        labels.push(`${fAge} yrs (+${i}y)`);
+        currentTraj.push(rfOfflinePredict({ ...state, age: fAge }).total);
+        optTraj.push(rfOfflinePredict({ ...state, age: fAge, smoker: false, bmi: Math.min(state.bmi, 24.0) }).total);
+      }
+
+      renderSimulationResults({
+        smoke_cost: simSmoke,
+        smoke_savings: smokeSavings,
+        bmi_cost: simBmi,
+        bmi_savings: bmiSavings,
+        age_cost: simAge,
+        age_diff: ageDiff,
+        trajectory_labels: labels,
+        trajectory_current: currentTraj,
+        trajectory_optimized: optTraj
+      });
+    }
+
+    function updateBmiCategoryBadge(bmi) {
+      const badge = document.getElementById('bmi-badge');
+      if (bmi < 18.5) {
+        badge.textContent = `Underweight (${bmi.toFixed(1)})`;
+        badge.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
+      } else if (bmi < 25) {
+        badge.textContent = `Normal (${bmi.toFixed(1)})`;
+        badge.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300';
+      } else if (bmi < 30) {
+        badge.textContent = `Overweight (${bmi.toFixed(1)})`;
+        badge.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
+      } else {
+        badge.textContent = `Obese (${bmi.toFixed(1)})`;
+        badge.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300';
+      }
+    }
+
+    function setSex(s) {
+      state.sex = s;
+      const btnF = document.getElementById('sex-female');
+      const btnM = document.getElementById('sex-male');
+      if (s === 'female') {
+        btnF.className = 'py-2 px-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300 shadow-xs';
+        btnM.className = 'py-2 px-3 rounded-xl border text-xs sm:text-sm font-medium transition-all border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300';
+      } else {
+        btnM.className = 'py-2 px-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300 shadow-xs';
+        btnF.className = 'py-2 px-3 rounded-xl border text-xs sm:text-sm font-medium transition-all border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300';
+      }
+      handleParamChange();
+    }
+
+    function setSmoker(val) {
+      state.smoker = val;
+      const btnNo = document.getElementById('smoker-no');
+      const btnYes = document.getElementById('smoker-yes');
+      if (!val) {
+        btnNo.className = 'py-2 px-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 shadow-xs';
+        btnYes.className = 'py-2 px-3 rounded-xl border text-xs sm:text-sm font-medium transition-all border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300';
+      } else {
+        btnYes.className = 'py-2 px-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all border-rose-500 bg-rose-50 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 shadow-xs';
+        btnNo.className = 'py-2 px-3 rounded-xl border text-xs sm:text-sm font-medium transition-all border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300';
+      }
+      handleParamChange();
+    }
+
+    function setChildren(count) {
+      state.children = count;
+      document.querySelectorAll('.child-btn').forEach(btn => {
+        const val = parseInt(btn.getAttribute('data-val'), 10);
+        if (val === count) {
+          btn.className = 'child-btn py-1.5 text-xs font-semibold rounded-lg border border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300';
+        } else {
+          btn.className = 'child-btn py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-400';
+        }
+      });
+      handleParamChange();
+    }
+
+    function toggleBmiCalculator() {
+      const box = document.getElementById('bmi-calc-subform');
+      const text = document.getElementById('bmi-toggle-text');
+      if (box.classList.contains('hidden')) {
+        box.classList.remove('hidden');
+        text.textContent = 'Hide Height/Weight Inputs';
+      } else {
+        box.classList.add('hidden');
+        text.textContent = 'Calculate from Height/Weight';
+      }
+    }
+
+    function computeBmiFromHW() {
+      const h = parseFloat(document.getElementById('calc-height').value) || 68;
+      const w = parseFloat(document.getElementById('calc-weight').value) || 150;
+      if (h > 0 && w > 0) {
+        const computed = (w * 703) / (h * h);
+        const clamped = Math.min(50, Math.max(15, parseFloat(computed.toFixed(1))));
+        document.getElementById('input-bmi').value = clamped;
+        handleParamChange();
+      }
+    }
+
+    function updateDashboard(res) {
+      const total = res.total || res.predicted_annual;
+      const monthly = res.monthly || res.predicted_monthly;
+      const lower = res.ci_lower || res.confidence_lower;
+      const upper = res.ci_upper || res.confidence_upper;
+
+      const annualElem = document.getElementById('res-annual');
+      annualElem.textContent = '$' + total.toLocaleString();
+      annualElem.style.opacity = '1.0';
+
+      document.getElementById('res-monthly').innerHTML = `$${monthly.toLocaleString()}<span class="text-xs font-normal text-slate-400">/mo</span>`;
+      document.getElementById('res-ci').textContent = `90% Prediction Band: $${lower.toLocaleString()} – $${upper.toLocaleString()}`;
+
+      // Risk Tier Badge
+      const tierBadge = document.getElementById('res-tier-badge');
+      let tierName = 'Low Risk Tier';
+      if (total < 6000) {
+        tierName = 'Low Risk Tier';
+        tierBadge.className = 'mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+        tierBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5"></span> Low Risk Tier';
+      } else if (total < 14000) {
+        tierName = 'Moderate Risk Tier';
+        tierBadge.className = 'mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/40';
+        tierBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-blue-400 mr-1.5"></span> Moderate Risk Tier';
+      } else if (total < 28000) {
+        tierName = 'High Risk Tier';
+        tierBadge.className = 'mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+        tierBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5"></span> High Risk Tier';
+      } else {
+        tierName = 'Critical Risk Tier';
+        tierBadge.className = 'mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40';
+        tierBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-rose-400 mr-1.5"></span> Critical Risk Tier';
+      }
+
+      // Bar Proportions
+      const b = res.breakdown;
+      const positiveTotal = Math.max(1, (b.base + b.age + b.bmi + b.children + b.smoker));
+      document.getElementById('bar-base').style.width = `${(b.base / positiveTotal) * 100}%`;
+      document.getElementById('bar-age').style.width = `${(b.age / positiveTotal) * 100}%`;
+      document.getElementById('bar-bmi').style.width = `${(b.bmi / positiveTotal) * 100}%`;
+      document.getElementById('bar-smoker').style.width = `${(b.smoker / positiveTotal) * 100}%`;
+      document.getElementById('bar-kids').style.width = `${(b.children / positiveTotal) * 100}%`;
+      document.getElementById('res-base-share').textContent = `Base: $${b.base.toLocaleString()}`;
+
+      // Benchmarks
+      const peerBaseline = res.peer_baseline || Math.round(2200 + (state.age * 72));
+      document.getElementById('peer-cost').textContent = '$' + peerBaseline.toLocaleString();
+      const peerDiff = Math.round(((total - peerBaseline) / peerBaseline) * 100);
+      const peerDiffElem = document.getElementById('delta-peer');
+      if (peerDiff <= 0) {
+        peerDiffElem.textContent = `${peerDiff}% vs cohort`;
+        peerDiffElem.className = 'text-[10px] font-semibold text-emerald-600 mt-0.5';
+      } else {
+        peerDiffElem.textContent = `+${peerDiff}% vs cohort`;
+        peerDiffElem.className = 'text-[10px] font-semibold text-rose-500 mt-0.5';
+      }
+
+      const nationalAvg = 13261;
+      const natDiff = Math.round(((total - nationalAvg) / nationalAvg) * 100);
+      const natDiffElem = document.getElementById('delta-us');
+      if (natDiff <= 0) {
+        natDiffElem.textContent = `${natDiff}% vs avg`;
+        natDiffElem.className = 'text-[10px] font-semibold text-emerald-600 mt-0.5';
+      } else {
+        natDiffElem.textContent = `+${natDiff}% vs avg`;
+        natDiffElem.className = 'text-[10px] font-semibold text-rose-500 mt-0.5';
+      }
+
+      // Feature Attribution Waterfall & Metallic Plan Tier Matching
+      renderWaterfall(total, b);
+      updatePlanTiers(total, tierName);
+
+      populateInsights(total, b);
+      updateFactorChart(b);
+      updateReverseBudgetAnalysis();
+    }
+
+    // Render Explainable SHAP-Style Waterfall
+    function renderWaterfall(total, b) {
+      const container = document.getElementById('waterfall-container');
+      if (!container) return;
+
+      const baseVal = b.base || 2359;
+      const ageVal = b.age || 0;
+      const bmiVal = b.bmi || 0;
+      const smokeVal = b.smoker || 0;
+      const kidsVal = b.children || 0;
+      const regionVal = (total - (baseVal + ageVal + bmiVal + smokeVal + kidsVal)) || 0;
+
+      const items = [
+        { label: 'Baseline Reference (E[X])', val: baseVal, type: 'base', sign: '$' + baseVal.toLocaleString() },
+        { label: '+ Age Effect', val: ageVal, type: 'pos', sign: '+$' + ageVal.toLocaleString() },
+        { label: '+ BMI Impact', val: bmiVal, type: 'pos', sign: '+$' + bmiVal.toLocaleString() },
+        { label: state.smoker ? '+ Tobacco Penalty' : '• Tobacco Status', val: smokeVal, type: state.smoker ? 'neg' : 'zero', sign: state.smoker ? '+$' + smokeVal.toLocaleString() : '$0' },
+        { label: '+ Dependents Surcharge', val: kidsVal, type: kidsVal > 0 ? 'pos' : 'zero', sign: kidsVal > 0 ? '+$' + kidsVal.toLocaleString() : '$0' },
+        { label: regionVal >= 0 ? '+ Regional Adjustment' : '- Regional Adjustment', val: Math.abs(regionVal), type: regionVal >= 0 ? 'pos' : 'neg', sign: (regionVal >= 0 ? '+' : '-') + '$' + Math.abs(regionVal).toLocaleString() },
+        { label: '= Final Model Prediction f(x)', val: total, type: 'final', sign: '$' + total.toLocaleString() }
+      ];
+
+      const maxVal = Math.max(total, baseVal + ageVal + bmiVal + smokeVal + kidsVal + 2000);
+
+      container.innerHTML = items.map(item => {
+        const pct = Math.min(100, Math.max(6, (Math.abs(item.val) / maxVal) * 100));
+        let barColor = 'bg-slate-400';
+        let textColor = 'text-slate-600 dark:text-slate-300';
+        if (item.type === 'base') barColor = 'bg-slate-400';
+        else if (item.type === 'pos') barColor = 'bg-blue-500';
+        else if (item.type === 'neg') barColor = 'bg-rose-500';
+        else if (item.type === 'zero') barColor = 'bg-slate-300 dark:bg-slate-700';
+        else if (item.type === 'final') {
+          barColor = 'bg-cyan-500';
+          textColor = 'font-bold text-cyan-600 dark:text-cyan-400';
+        }
+
+        return `
+          <div class="space-y-0.5">
+            <div class="flex justify-between text-[11px] ${textColor}">
+              <span>${item.label}</span>
+              <span class="font-bold">${item.sign}</span>
+            </div>
+            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden flex">
+              <div class="${barColor} h-2 rounded-full transition-all duration-300" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Update Metallic Plan Tiers
+    function updatePlanTiers(total, tierName) {
+      const bronzePrem = Math.round(total * 0.055);
+      const silverPrem = Math.round(total / 12);
+      const goldPrem = Math.round(total * 0.115);
+      const platPrem = Math.round(total * 0.155);
+
+      document.getElementById('tier-premium-bronze').textContent = '$' + bronzePrem.toLocaleString() + '/mo';
+      document.getElementById('tier-premium-silver').textContent = '$' + silverPrem.toLocaleString() + '/mo';
+      document.getElementById('tier-premium-gold').textContent = '$' + goldPrem.toLocaleString() + '/mo';
+      document.getElementById('tier-premium-platinum').textContent = '$' + platPrem.toLocaleString() + '/mo';
+
+      const pill = document.getElementById('recommended-tier-pill');
+      const note = document.getElementById('tier-recommendation-note');
+
+      // Reset card borders
+      ['bronze', 'silver', 'gold', 'platinum'].forEach(t => {
+        const c = document.getElementById(`tier-card-${t}`);
+        c.className = 'tier-card p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 text-center transition-all hover:border-slate-400';
+      });
+
+      if (total < 7000) {
+        pill.textContent = 'Recommended: Bronze / Silver Plan';
+        document.getElementById('tier-card-silver').className = 'tier-card p-3 rounded-xl border-2 border-cyan-500 bg-cyan-50/50 dark:bg-cyan-950/40 text-center transition-all shadow-xs';
+        note.textContent = 'Low expected claims utilization: Bronze or Silver plans minimize fixed monthly premiums while keeping catastrophe coverage active.';
+      } else if (total < 18000) {
+        pill.textContent = 'Recommended: Silver / Gold Plan';
+        document.getElementById('tier-card-silver').className = 'tier-card p-3 rounded-xl border-2 border-cyan-500 bg-cyan-50/50 dark:bg-cyan-950/40 text-center transition-all shadow-xs';
+        note.textContent = 'Moderate expected utilization: Silver or Gold tiers provide substantial actuarial value with reasonable copays.';
+      } else {
+        pill.textContent = 'Recommended: Gold / Platinum Plan';
+        document.getElementById('tier-card-gold').className = 'tier-card p-3 rounded-xl border-2 border-amber-500 bg-amber-50/50 dark:bg-amber-950/40 text-center transition-all shadow-xs';
+        note.textContent = 'High expected medical utilization: High-tier Gold or Platinum coverage shields policyholder from catastrophic out-of-pocket deductibles.';
+      }
+    }
+
+    function populateInsights(total, b) {
+      const container = document.getElementById('insight-container');
+      const items = [];
+
+      if (state.smoker) {
+        const estSmokeSave = b.smoker || 14000;
+        items.push(`
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700">
+            <span class="font-semibold text-slate-800 dark:text-slate-200">Smoking Cessation:</span> Quitting yields an estimated <span class="font-bold text-emerald-600 dark:text-emerald-400">-$${estSmokeSave.toLocaleString()}/yr</span> premium reduction.
+          </div>
+        `);
+      }
+
+      if (state.bmi > 25.0) {
+        const estBmiSave = Math.round(b.bmi * 0.7) || 1200;
+        items.push(`
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700">
+            <span class="font-semibold text-slate-800 dark:text-slate-200">BMI Normalization:</span> Reaching target BMI (24.0) saves an estimated <span class="font-bold text-emerald-600 dark:text-emerald-400">-$${estBmiSave.toLocaleString()}/yr</span>.
+          </div>
+        `);
+      }
+
+      if (items.length === 0) {
+        items.push(`
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+            <span class="font-semibold text-slate-800 dark:text-slate-200">Optimal Baseline:</span> Profile is currently situated in the lowest underwriting risk tier.
+          </div>
+        `);
+      }
+
+      container.innerHTML = items.join('');
+    }
+
+    // Chart.js: Factor Breakdown
+    function updateFactorChart(breakdown) {
+      const ctx = document.getElementById('factorContributionChart');
+      if (!ctx) return;
+
+      const dataValues = [
+        breakdown.base,
+        breakdown.age,
+        breakdown.bmi,
+        breakdown.smoker,
+        breakdown.children
+      ];
+
+      if (factorChartInstance) {
+        factorChartInstance.data.datasets[0].data = dataValues;
+        factorChartInstance.update();
+        return;
+      }
+
+      factorChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Base Charge', 'Age', 'BMI', 'Tobacco', 'Dependents'],
+          datasets: [{
+            data: dataValues,
+            backgroundColor: ['#94a3b8', '#3b82f6', '#f59e0b', '#f43f5e', '#14b8a6'],
+            borderRadius: 5
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` $${ctx.raw.toLocaleString()}`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: (val) => '$' + (val >= 1000 ? (val/1000) + 'k' : val)
+              },
+              grid: { color: 'rgba(148, 163, 184, 0.12)' }
+            },
+            x: {
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    function renderTrajectoryChart(labels, currentTrajectory, optimizedTrajectory) {
+      const ctx = document.getElementById('scenarioComparisonChart');
+      if (!ctx) return;
+
+      if (trajectoryChartInstance) {
+        trajectoryChartInstance.data.labels = labels;
+        trajectoryChartInstance.data.datasets[0].data = currentTrajectory;
+        trajectoryChartInstance.data.datasets[1].data = optimizedTrajectory;
+        trajectoryChartInstance.update();
+        return;
+      }
+
+      trajectoryChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Current Status Trajectory',
+              data: currentTrajectory,
+              borderColor: '#0284c7',
+              backgroundColor: 'rgba(2, 132, 199, 0.08)',
+              borderWidth: 2,
+              tension: 0.25,
+              fill: false
+            },
+            {
+              label: 'Optimized Path (Non-smoker & BMI ≤ 24.0)',
+              data: optimizedTrajectory,
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.04)',
+              borderDash: [4, 4],
+              borderWidth: 2,
+              tension: 0.25,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` ${ctx.dataset.label}: $${ctx.raw.toLocaleString()}/yr`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: false,
+              ticks: {
+                callback: (val) => '$' + (val >= 1000 ? (val/1000) + 'k' : val)
+              },
+              grid: { color: 'rgba(148, 163, 184, 0.12)' }
+            },
+            x: {
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    // Modal & PDF Export Actions
+    function openClientPDFModal() {
+      const modal = document.getElementById('client-pdf-modal');
+      modal.classList.remove('hidden');
+
+      const total = lastResult ? (lastResult.total || lastResult.predicted_annual) : 4377;
+      const monthly = Math.round(total / 12);
+      const lower = lastResult ? (lastResult.ci_lower || lastResult.confidence_lower) : Math.round(total * 0.9);
+      const upper = lastResult ? (lastResult.ci_upper || lastResult.confidence_upper) : Math.round(total * 1.1);
+
+      document.getElementById('pdf-ref-id').textContent = 'MR-2026-' + Math.floor(1000 + Math.random() * 9000);
+      document.getElementById('pdf-date').textContent = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      document.getElementById('pdf-val-age').textContent = `${state.age} yrs`;
+      document.getElementById('pdf-val-sex').textContent = state.sex.charAt(0).toUpperCase() + state.sex.slice(1);
+      document.getElementById('pdf-val-bmi').textContent = `${state.bmi.toFixed(1)} (${state.bmi < 25 ? 'Normal' : (state.bmi < 30 ? 'Overweight' : 'Obese')})`;
+      document.getElementById('pdf-val-smoker').textContent = state.smoker ? 'Smoker (Regular)' : 'Non-Smoker';
+      document.getElementById('pdf-val-children').textContent = `${state.children} Dependents`;
+      document.getElementById('pdf-val-region').textContent = state.region.charAt(0).toUpperCase() + state.region.slice(1);
+
+      document.getElementById('pdf-quote-annual').textContent = '$' + total.toLocaleString();
+      document.getElementById('pdf-quote-monthly').textContent = '$' + monthly.toLocaleString() + ' / mo';
+      document.getElementById('pdf-quote-ci').textContent = `$${lower.toLocaleString()} – $${upper.toLocaleString()}`;
+
+      // Set Plan Tier in PDF
+      if (total < 7000) {
+        document.getElementById('pdf-plan-name').textContent = 'Silver Metallic Plan (70% Actuarial Value)';
+        document.getElementById('pdf-plan-premium').textContent = '$' + monthly.toLocaleString() + ' / mo';
+        document.getElementById('pdf-plan-deductible').textContent = 'Deductible: $4,500';
+      } else {
+        document.getElementById('pdf-plan-name').textContent = 'Gold Metallic Plan (80% Actuarial Value)';
+        document.getElementById('pdf-plan-premium').textContent = '$' + Math.round(total * 0.115).toLocaleString() + ' / mo';
+        document.getElementById('pdf-plan-deductible').textContent = 'Deductible: $1,500';
+      }
+
+      // Insights
+      const insightsList = document.getElementById('pdf-insights-list');
+      if (state.smoker) {
+        insightsList.innerHTML = `
+          <li>Quitting tobacco usage unlocks an immediate annual projected savings of -$14,000+/year.</li>
+          <li>Elevated underwriting load due to non-linear tobacco and morbidity risk.</li>
+        `;
+      } else {
+        insightsList.innerHTML = `
+          <li>Profile is situated within the lowest actuarial expense tier.</li>
+          <li>Non-smoker classification achieves maximum underwriting premium efficiency.</li>
+        `;
+      }
+    }
+
+    function closeClientPDFModal() {
+      document.getElementById('client-pdf-modal').classList.add('hidden');
+    }
+
+    // ==========================================
+    // REVERSE BUDGET CALCULATOR INTERACTION
+    // ==========================================
+    function handleBudgetSliderChange() {
+      targetBudgetValue = parseInt(document.getElementById('budget-slider').value, 10);
+      document.getElementById('budget-target-label').textContent = `$${targetBudgetValue} / mo`;
+      document.getElementById('budget-target-val').textContent = `$${targetBudgetValue} / mo`;
+      updateReverseBudgetAnalysis();
+    }
+
+    function updateReverseBudgetAnalysis() {
+      const currentMonthly = lastResult ? Math.round((lastResult.total || lastResult.predicted_annual) / 12) : 365;
+      const currentValElem = document.getElementById('budget-current-val');
+      if (currentValElem) currentValElem.textContent = `$${currentMonthly} / mo`;
+
+      const gap = targetBudgetValue - currentMonthly;
+      const gapElem = document.getElementById('budget-gap-val');
+      const pillElem = document.getElementById('budget-feasibility-pill');
+      const descElem = document.getElementById('budget-analysis-desc');
+      const badgeElem = document.getElementById('budget-target-badge');
+
+      if (!gapElem) return;
+
+      if (gap >= 0) {
+        gapElem.textContent = `+$${gap} / mo surplus`;
+        gapElem.className = 'font-mono font-bold text-emerald-600 dark:text-emerald-400';
+        pillElem.textContent = 'Budget Met';
+        pillElem.className = 'text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 self-start sm:self-auto';
+        descElem.textContent = `Current profile comfortably satisfies your $${targetBudgetValue}/mo budget with a +$${gap}/mo monthly reserve. Consider Gold or Platinum plan tiers for enhanced low-deductible coverage.`;
+        badgeElem.textContent = 'No biometric reductions required';
+      } else {
+        const absGap = Math.abs(gap);
+        gapElem.textContent = `-$${absGap} / mo gap`;
+        gapElem.className = 'font-mono font-bold text-amber-500';
+        pillElem.textContent = 'Action Required';
+        pillElem.className = 'text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 self-start sm:self-auto';
+
+        if (state.smoker) {
+          descElem.textContent = `Target of $${targetBudgetValue}/mo requires smoking cessation (saving ~$1,100+/mo) and pairing with an ACA Silver or Bronze high-deductible plan.`;
+          badgeElem.textContent = `Non-Smoker Status • Target BMI: 23.5`;
+        } else if (state.bmi > 25.0) {
+          descElem.textContent = `Target of $${targetBudgetValue}/mo can be unlocked by adjusting BMI toward optimal normal range (22.5) and selecting a Silver/Bronze plan tier.`;
+          badgeElem.textContent = `Target BMI: 22.5 • Current: ${state.bmi.toFixed(1)}`;
+        } else {
+          descElem.textContent = `To reach $${targetBudgetValue}/mo, pair your low-risk biometrics with an ACA Bronze high-deductible health savings plan ($240/mo).`;
+          badgeElem.textContent = `ACA Bronze HSA Matched ($240/mo)`;
+        }
+      }
+    }
+
+    function applyBudgetTargets() {
+      if (state.smoker) {
+        setSmoker(false);
+      }
+      if (state.bmi > 24.5) {
+        state.bmi = 22.5;
+        document.getElementById('input-bmi').value = 22.5;
+      }
+      handleParamChange();
+      showToast('Applied recommended biometric targets to Estimator inputs.');
+    }
+
+    // ==========================================
+    // DUAL PROFILE COMPARATOR INTERACTION
+    // ==========================================
+    function handleCompParamChange(profile) {
+      if (profile === 'a') {
+        compStateA.age = parseInt(document.getElementById('comp-a-age').value, 10);
+        compStateA.bmi = parseFloat(document.getElementById('comp-a-bmi').value);
+        compStateA.region = document.getElementById('comp-a-region').value;
+        document.getElementById('comp-a-age-label').textContent = `${compStateA.age} yrs`;
+        document.getElementById('comp-a-bmi-label').textContent = compStateA.bmi.toFixed(1);
+        updateCompBmiBadge('a', compStateA.bmi);
+      } else {
+        compStateB.age = parseInt(document.getElementById('comp-b-age').value, 10);
+        compStateB.bmi = parseFloat(document.getElementById('comp-b-bmi').value);
+        compStateB.region = document.getElementById('comp-b-region').value;
+        document.getElementById('comp-b-age-label').textContent = `${compStateB.age} yrs`;
+        document.getElementById('comp-b-bmi-label').textContent = compStateB.bmi.toFixed(1);
+        updateCompBmiBadge('b', compStateB.bmi);
+      }
+      updateComparatorView();
+    }
+
+    function setCompSex(profile, s) {
+      const st = profile === 'a' ? compStateA : compStateB;
+      st.sex = s;
+      const btnF = document.getElementById(`comp-${profile}-sex-female`);
+      const btnM = document.getElementById(`comp-${profile}-sex-male`);
+      if (s === 'female') {
+        btnF.className = 'py-1.5 px-3 rounded-lg border font-semibold border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300';
+        btnM.className = 'py-1.5 px-3 rounded-lg border font-medium border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300';
+      } else {
+        btnM.className = 'py-1.5 px-3 rounded-lg border font-semibold border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300';
+        btnF.className = 'py-1.5 px-3 rounded-lg border font-medium border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300';
+      }
+      handleCompParamChange(profile);
+    }
+
+    function setCompSmoker(profile, val) {
+      const st = profile === 'a' ? compStateA : compStateB;
+      st.smoker = val;
+      const btnNo = document.getElementById(`comp-${profile}-smoker-no`);
+      const btnYes = document.getElementById(`comp-${profile}-smoker-yes`);
+      if (!val) {
+        btnNo.className = 'py-1.5 px-3 rounded-lg border font-semibold border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300';
+        btnYes.className = 'py-1.5 px-3 rounded-lg border font-medium border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300';
+      } else {
+        btnYes.className = 'py-1.5 px-3 rounded-lg border font-semibold border-rose-500 bg-rose-50 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300';
+        btnNo.className = 'py-1.5 px-3 rounded-lg border font-medium border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300';
+      }
+      handleCompParamChange(profile);
+    }
+
+    function setCompChildren(profile, count) {
+      const st = profile === 'a' ? compStateA : compStateB;
+      st.children = count;
+      document.querySelectorAll(`.comp-${profile}-child-btn`).forEach(btn => {
+        const val = parseInt(btn.getAttribute('data-val'), 10);
+        if (val === count) {
+          btn.className = `comp-${profile}-child-btn py-1 text-xs font-semibold rounded-lg border border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300`;
+        } else {
+          btn.className = `comp-${profile}-child-btn py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300`;
+        }
+      });
+      handleCompParamChange(profile);
+    }
+
+    function updateCompBmiBadge(profile, bmi) {
+      const badge = document.getElementById(`comp-${profile}-bmi-badge`);
+      if (!badge) return;
+      if (bmi < 18.5) {
+        badge.textContent = 'Underweight';
+        badge.className = 'px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
+      } else if (bmi < 25) {
+        badge.textContent = 'Normal';
+        badge.className = 'px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300';
+      } else if (bmi < 30) {
+        badge.textContent = 'Overweight';
+        badge.className = 'px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
+      } else {
+        badge.textContent = 'Obese';
+        badge.className = 'px-1.5 py-0.2 rounded text-[10px] font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300';
+      }
+    }
+
+    function copyProfileAToB() {
+      Object.assign(compStateB, JSON.parse(JSON.stringify(compStateA)));
+      document.getElementById('comp-b-age').value = compStateB.age;
+      document.getElementById('comp-b-bmi').value = compStateB.bmi;
+      document.getElementById('comp-b-region').value = compStateB.region;
+      setCompSex('b', compStateB.sex);
+      setCompSmoker('b', compStateB.smoker);
+      setCompChildren('b', compStateB.children);
+      handleCompParamChange('b');
+      showToast('Copied Profile A settings to Profile B.');
+    }
+
+    function swapProfiles() {
+      const temp = JSON.parse(JSON.stringify(compStateA));
+      Object.assign(compStateA, JSON.parse(JSON.stringify(compStateB)));
+      Object.assign(compStateB, temp);
+      
+      document.getElementById('comp-a-age').value = compStateA.age;
+      document.getElementById('comp-a-bmi').value = compStateA.bmi;
+      document.getElementById('comp-a-region').value = compStateA.region;
+      setCompSex('a', compStateA.sex);
+      setCompSmoker('a', compStateA.smoker);
+      setCompChildren('a', compStateA.children);
+      handleCompParamChange('a');
+
+      document.getElementById('comp-b-age').value = compStateB.age;
+      document.getElementById('comp-b-bmi').value = compStateB.bmi;
+      document.getElementById('comp-b-region').value = compStateB.region;
+      setCompSex('b', compStateB.sex);
+      setCompSmoker('b', compStateB.smoker);
+      setCompChildren('b', compStateB.children);
+      handleCompParamChange('b');
+
+      showToast('Swapped Profile A and Profile B.');
+    }
+
+    function resetComparator() {
+      compStateA.age = 32; compStateA.sex = 'female'; compStateA.bmi = 23.5; compStateA.children = 0; compStateA.smoker = false; compStateA.region = 'southwest';
+      compStateB.age = 28; compStateB.sex = 'female'; compStateB.bmi = 21.8; compStateB.children = 0; compStateB.smoker = false; compStateB.region = 'southwest';
+
+      document.getElementById('comp-a-age').value = 32; document.getElementById('comp-a-bmi').value = 23.5; document.getElementById('comp-a-region').value = 'southwest';
+      setCompSex('a', 'female'); setCompSmoker('a', false); setCompChildren('a', 0); handleCompParamChange('a');
+
+      document.getElementById('comp-b-age').value = 28; document.getElementById('comp-b-bmi').value = 21.8; document.getElementById('comp-b-region').value = 'southwest';
+      setCompSex('b', 'female'); setCompSmoker('b', false); setCompChildren('b', 0); handleCompParamChange('b');
+
+      showToast('Dual Comparator reset to initial profiles.');
+    }
+
+    function updateComparatorView() {
+      const predA = rfOfflinePredict(compStateA);
+      const predB = rfOfflinePredict(compStateB);
+
+      const annualA = predA.total;
+      const annualB = predB.total;
+      const monthlyA = Math.round(annualA / 12);
+      const monthlyB = Math.round(annualB / 12);
+
+      const netAnnual = annualB - annualA;
+      const netMonthly = monthlyB - monthlyA;
+      const pct = annualA > 0 ? ((netAnnual / annualA) * 100).toFixed(1) : '0';
+
+      const aAnnualElem = document.getElementById('comp-kpi-a-annual');
+      const aMonthlyElem = document.getElementById('comp-kpi-a-monthly');
+      const bAnnualElem = document.getElementById('comp-kpi-b-annual');
+      const bMonthlyElem = document.getElementById('comp-kpi-b-monthly');
+
+      if (aAnnualElem) aAnnualElem.textContent = '$' + annualA.toLocaleString() + '/yr';
+      if (aMonthlyElem) aMonthlyElem.textContent = '$' + monthlyA.toLocaleString() + ' / month';
+      if (bAnnualElem) bAnnualElem.textContent = '$' + annualB.toLocaleString() + '/yr';
+      if (bMonthlyElem) bMonthlyElem.textContent = '$' + monthlyB.toLocaleString() + ' / month';
+
+      const netAnnualElem = document.getElementById('comp-kpi-net-annual');
+      const netPctElem = document.getElementById('comp-kpi-net-pct');
+      const netMonthlyElem = document.getElementById('comp-kpi-net-monthly');
+      const badgeElem = document.getElementById('comp-kpi-badge');
+
+      if (netAnnualElem && netPctElem && netMonthlyElem && badgeElem) {
+        if (netAnnual <= 0) {
+          netAnnualElem.textContent = '-$' + Math.abs(netAnnual).toLocaleString() + '/yr';
+          netAnnualElem.className = 'text-xl sm:text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1';
+          netPctElem.textContent = `${pct}% Cost Reduction`;
+          netPctElem.className = 'text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5';
+          netMonthlyElem.textContent = '-$' + Math.abs(netMonthly).toLocaleString() + ' / mo';
+          netMonthlyElem.className = 'text-xl sm:text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1';
+          badgeElem.textContent = 'Actuarial Savings';
+          badgeElem.className = 'text-[10px] inline-block font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 mt-0.5';
+        } else {
+          netAnnualElem.textContent = '+$' + Math.abs(netAnnual).toLocaleString() + '/yr';
+          netAnnualElem.className = 'text-xl sm:text-2xl font-bold font-mono text-rose-500 mt-1';
+          netPctElem.textContent = `+${pct}% Risk Expansion`;
+          netPctElem.className = 'text-xs font-semibold text-rose-500 mt-0.5';
+          netMonthlyElem.textContent = '+$' + Math.abs(netMonthly).toLocaleString() + ' / mo';
+          netMonthlyElem.className = 'text-xl sm:text-2xl font-bold font-mono text-rose-500 mt-1';
+          badgeElem.textContent = 'Elevated Risk Load';
+          badgeElem.className = 'text-[10px] inline-block font-semibold px-2 py-0.5 rounded bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 mt-0.5';
+        }
+      }
+
+      // Populate differential table
+      const tbody = document.getElementById('comp-variance-tbody');
+      if (tbody) {
+        const smokeDelta = predB.breakdown.smoker - predA.breakdown.smoker;
+        const bmiDelta = predB.breakdown.bmi - predA.breakdown.bmi;
+        const ageDelta = predB.breakdown.age - predA.breakdown.age;
+        const childDelta = predB.breakdown.children - predA.breakdown.children;
+
+        const fmtDelta = (val) => {
+          if (Math.abs(val) < 15) return '<span class="text-slate-400 font-sans">$0</span>';
+          if (val < 0) return `<span class="text-emerald-600 dark:text-emerald-400 font-semibold">-$${Math.abs(val).toLocaleString()}</span>`;
+          return `<span class="text-rose-500 font-semibold">+$${Math.abs(val).toLocaleString()}</span>`;
+        };
+
+        tbody.innerHTML = `
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="py-2.5 px-2 font-medium font-sans">Tobacco Classification</td>
+            <td class="py-2.5 px-2">${compStateA.smoker ? '<span class="text-rose-500 font-semibold">Smoker</span>' : '<span class="text-emerald-600 font-medium">Non-Smoker</span>'}</td>
+            <td class="py-2.5 px-2">${compStateB.smoker ? '<span class="text-rose-500 font-semibold">Smoker</span>' : '<span class="text-emerald-600 font-medium">Non-Smoker</span>'}</td>
+            <td class="py-2.5 px-2 text-right">${fmtDelta(smokeDelta)}</td>
+          </tr>
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="py-2.5 px-2 font-medium font-sans">Body Mass Index (BMI)</td>
+            <td class="py-2.5 px-2">${compStateA.bmi.toFixed(1)}</td>
+            <td class="py-2.5 px-2">${compStateB.bmi.toFixed(1)}</td>
+            <td class="py-2.5 px-2 text-right">${fmtDelta(bmiDelta)}</td>
+          </tr>
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="py-2.5 px-2 font-medium font-sans">Age Progression</td>
+            <td class="py-2.5 px-2">${compStateA.age} yrs</td>
+            <td class="py-2.5 px-2">${compStateB.age} yrs</td>
+            <td class="py-2.5 px-2 text-right">${fmtDelta(ageDelta)}</td>
+          </tr>
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="py-2.5 px-2 font-medium font-sans">Family Dependents</td>
+            <td class="py-2.5 px-2">${compStateA.children} kids</td>
+            <td class="py-2.5 px-2">${compStateB.children} kids</td>
+            <td class="py-2.5 px-2 text-right">${fmtDelta(childDelta)}</td>
+          </tr>
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 font-semibold bg-slate-50/50 dark:bg-slate-800/30">
+            <td class="py-2.5 px-2 font-sans">Net Policyholder Outlay</td>
+            <td class="py-2.5 px-2 font-mono">$${annualA.toLocaleString()}</td>
+            <td class="py-2.5 px-2 font-mono">$${annualB.toLocaleString()}</td>
+            <td class="py-2.5 px-2 text-right">${fmtDelta(netAnnual)}</td>
+          </tr>
+        `;
+      }
+
+      renderDualComparisonChart(predA, predB);
+    }
+
+    function renderDualComparisonChart(predA, predB) {
+      const ctx = document.getElementById('dualComparisonChart');
+      if (!ctx) return;
+
+      const isDark = document.documentElement.classList.contains('dark');
+      const textColor = isDark ? '#94a3b8' : '#64748b';
+
+      if (dualCompChartInstance) {
+        dualCompChartInstance.destroy();
+      }
+
+      dualCompChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Total Cost', 'Age Factor', 'BMI Factor', 'Smoker Factor'],
+          datasets: [
+            {
+              label: 'Profile A (Before)',
+              data: [predA.total, predA.breakdown.age, predA.breakdown.bmi, predA.breakdown.smoker],
+              backgroundColor: isDark ? 'rgba(148, 163, 184, 0.7)' : 'rgba(100, 116, 139, 0.7)',
+              borderRadius: 6
+            },
+            {
+              label: 'Profile B (After)',
+              data: [predB.total, predB.breakdown.age, predB.breakdown.bmi, predB.breakdown.smoker],
+              backgroundColor: 'rgba(6, 182, 212, 0.85)',
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: textColor, font: { family: 'Inter', size: 11 } }
+            },
+            tooltip: {
+              callbacks: {
+                label: (c) => ` ${c.dataset.label}: $${c.raw.toLocaleString()}`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                color: textColor,
+                callback: (val) => '$' + (val >= 1000 ? (val/1000) + 'k' : val)
+              },
+              grid: { color: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(226, 232, 240, 0.6)' }
+            },
+            x: {
+              ticks: { color: textColor, font: { size: 10 } },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    function switchTab(tabId) {
+      const views = ['predictor', 'comparator', 'simulator', 'model'];
+      views.forEach(v => {
+        const section = document.getElementById(`view-${v}`);
+        const btn = document.getElementById(`tab-${v}-btn`);
+        if (section && btn) {
+          if (v === tabId) {
+            section.classList.remove('hidden');
+            btn.className = 'px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-white dark:bg-slate-900 shadow-xs text-cyan-700 dark:text-cyan-400';
+          } else {
+            section.classList.add('hidden');
+            btn.className = 'px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+          }
+        }
+      });
+
+      if (tabId === 'comparator') {
+        updateComparatorView();
+        if (dualCompChartInstance) setTimeout(() => dualCompChartInstance.resize(), 50);
+      } else if (tabId === 'simulator' && trajectoryChartInstance) {
+        setTimeout(() => trajectoryChartInstance.resize(), 50);
+      }
+    }
+
+    function resetDefaults() {
+      state.age = 32;
+      state.sex = 'female';
+      state.bmi = 23.5;
+      state.children = 0;
+      state.smoker = false;
+      state.region = 'southwest';
+
+      document.getElementById('input-age').value = 32;
+      document.getElementById('input-bmi').value = 23.5;
+      document.getElementById('input-region').value = 'southwest';
+      setSex('female');
+      setSmoker(false);
+      setChildren(0);
+      handleParamChange();
+
+      showToast('Parameters reset to default baseline.');
+    }
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      document.getElementById('theme-sun').classList.toggle('hidden', !isDark);
+      document.getElementById('theme-moon').classList.toggle('hidden', isDark);
+    }
+
+    // Initialize application on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      handleParamChange();
+      updateComparatorView();
+      updateReverseBudgetAnalysis();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+services:
+  medirisk-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: medirisk-actuarial-engine:latest
+    container_name: medirisk_app
+    restart: unless-stopped
+    ports:
+      - "5000:7860"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=7860
+      - DOCKER_CONTAINER=true

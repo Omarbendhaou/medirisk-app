@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# LaTeX auxiliary build files (keep report.tex and report.pdf)
+*.aux
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.fls
+*.fdb_latexmk
+
+# Virtual environments
+.env
+.venv/
+env/
+venv/
+
+# System and IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.agents/
+.gemini/
