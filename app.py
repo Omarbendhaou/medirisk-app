@@ -23,8 +23,10 @@ def get_or_train_model():
         except Exception:
             pass
 
-    print("[*] Training Best Performing Model (Random Forest Regressor) from 'ML project 2.ipynb'...")
+    print("[*] Training Best Performing Model (Random Forest Regressor) from 'ML project 1.ipynb'...")
     df = pd.read_csv(DATA_PATH)
+    # Deduplicate dataset records to ensure pristine generalization and zero train-test leakage
+    df = df.drop_duplicates().reset_index(drop=True)
 
     def bmi_category(bmi):
         if bmi < 18.5: return "underweight"
@@ -43,13 +45,99 @@ def get_or_train_model():
     y = np.log1p(df['charges'])
 
     from sklearn.ensemble import RandomForestRegressor
-    rf = RandomForestRegressor(n_estimators=300, max_depth=6, n_jobs=-1, random_state=42)
+    rf = RandomForestRegressor(n_estimators=300, max_depth=6, n_jobs=1, random_state=42)
     rf.fit(X, y)
     joblib.dump(rf, MODEL_PATH)
     print(f"[✓] Model trained and saved to {MODEL_PATH}")
     return rf
 
 model = get_or_train_model()
+
+VALID_REGIONS = {'northeast', 'northwest', 'southeast', 'southwest'}
+VALID_SEX_MALE = {'1', 'male', 'm', 'true'}
+VALID_SEX_FEMALE = {'0', 'female', 'f', 'false'}
+
+def validate_policyholder_input(data):
+    """
+    Validates and sanitizes incoming JSON payload for actuarial prediction and simulation.
+    Ensures valid data types, within-bounds numeric values, and returns informative errors.
+    Returns: (cleaned_dict, error_list)
+    """
+    errors = []
+    cleaned = {}
+
+    if not isinstance(data, dict):
+        return None, ["Request body must be a valid JSON object."]
+
+    # 1. Age validation: int, [18, 100] (default 32)
+    raw_age = data.get('age', 32)
+    try:
+        age_val = int(raw_age)
+        if age_val < 18 or age_val > 100:
+            errors.append(f"Field 'age' must be an integer between 18 and 100 (received {raw_age}).")
+        else:
+            cleaned['age'] = age_val
+    except (ValueError, TypeError):
+        errors.append(f"Field 'age' must be a valid integer (received '{raw_age}').")
+
+    # 2. BMI validation: float, [10.0, 70.0] (default 23.5)
+    raw_bmi = data.get('bmi', 23.5)
+    try:
+        bmi_val = float(raw_bmi)
+        if bmi_val <= 0:
+            errors.append(f"Field 'bmi' cannot be negative or zero (received {raw_bmi}).")
+        elif bmi_val < 10.0 or bmi_val > 70.0:
+            errors.append(f"Field 'bmi' must be between 10.0 and 70.0 kg/m² (received {raw_bmi}).")
+        else:
+            cleaned['bmi'] = round(bmi_val, 2)
+    except (ValueError, TypeError):
+        errors.append(f"Field 'bmi' must be a valid numeric value (received '{raw_bmi}').")
+
+    # 3. Children validation: int, [0, 15] (default 0)
+    raw_children = data.get('children', 0)
+    try:
+        children_val = int(raw_children)
+        if children_val < 0 or children_val > 15:
+            errors.append(f"Field 'children' must be a non-negative integer between 0 and 15 (received {raw_children}).")
+        else:
+            cleaned['children'] = children_val
+    except (ValueError, TypeError):
+        errors.append(f"Field 'children' must be a valid non-negative integer (received '{raw_children}').")
+
+    # 4. Sex validation: 'male' / 'female'
+    raw_sex = data.get('sex', 'female')
+    sex_str = str(raw_sex).strip().lower()
+    if sex_str in VALID_SEX_MALE:
+        cleaned['sex'] = 'male'
+    elif sex_str in VALID_SEX_FEMALE:
+        cleaned['sex'] = 'female'
+    else:
+        errors.append(f"Field 'sex' must be 'male', 'female', 'm', or 'f' (received '{raw_sex}').")
+
+    # 5. Smoker validation: boolean
+    raw_smoker = data.get('smoker', False)
+    if isinstance(raw_smoker, bool):
+        cleaned['smoker'] = raw_smoker
+    else:
+        smoker_str = str(raw_smoker).strip().lower()
+        if smoker_str in ['1', 'yes', 'true', 'y']:
+            cleaned['smoker'] = True
+        elif smoker_str in ['0', 'no', 'false', 'n']:
+            cleaned['smoker'] = False
+        else:
+            errors.append(f"Field 'smoker' must be a boolean or one of: 'yes', 'no', 'true', 'false' (received '{raw_smoker}').")
+
+    # 6. Region validation: four US quadrants
+    raw_region = data.get('region', 'southwest')
+    region_str = str(raw_region).strip().lower()
+    if region_str in VALID_REGIONS:
+        cleaned['region'] = region_str
+    else:
+        errors.append(f"Field 'region' must be one of: {', '.join(sorted(VALID_REGIONS))} (received '{raw_region}').")
+
+    if errors:
+        return None, errors
+    return cleaned, []
 
 def build_feature_row(age, sex, bmi, children, smoker, region):
     if bmi < 18.5:
@@ -95,11 +183,11 @@ def predict_single(data):
     log_pred = model.predict(df_row)[0]
     annual = float(np.expm1(log_pred))
 
-    # Fast empirical confidence interval using 30 random trees or std
-    tree_sub = model.estimators_[::10]
+    # Empirical 90% confidence interval across the ensemble (5th to 95th percentiles)
+    tree_sub = model.estimators_[::5] if len(model.estimators_) > 60 else model.estimators_
     preds = np.array([np.expm1(t.predict(df_row.values)[0]) for t in tree_sub])
-    ci_lower = float(np.percentile(preds, 10))
-    ci_upper = float(np.percentile(preds, 90))
+    ci_lower = float(np.percentile(preds, 5))
+    ci_upper = float(np.percentile(preds, 95))
 
     # Counterfactual component attribution
     # 1. Base reference (18, female, normal BMI 22.0, 0 kids, non-smoker, northeast)
@@ -130,8 +218,14 @@ def predict_single(data):
     else:
         bmi_contrib = max(0.0, (row_dict['bmi'] - 18.5) * 65.0)
 
-    # 5. Children attribution
-    children_contrib = float(row_dict['children'] * 460.0)
+    # 5. Children attribution (model-derived marginal counterfactual)
+    if row_dict['children'] > 0:
+        no_children_dict = dict(row_dict)
+        no_children_dict['children'] = 0
+        no_children_cost = float(np.expm1(model.predict(pd.DataFrame([no_children_dict], columns=FEATURE_COLS))[0]))
+        children_contrib = max(0.0, annual - no_children_cost)
+    else:
+        children_contrib = 0.0
 
     # Peer baseline
     peer_dict = build_feature_row(data.get('age', 32), data.get('sex', 'female'), 24.0, 0, False, data.get('region', 'southwest'))
@@ -173,15 +267,17 @@ def simulate_scenarios(data):
     age_cost = predict_single(age_data)["predicted_annual"]
     age_diff = age_cost - current
 
-    # 4. Trajectory over next 10 years (batch)
+    # 4. Trajectory over next 10 years (batch) with 5.0% annual compounding medical inflation
     cur_age = int(data.get('age', 32))
     labels = []
     traj_cur_rows = []
     traj_opt_rows = []
+    inflation_multipliers = []
 
     for step in range(0, 11, 2):
         future_age = cur_age + step
         labels.append(f"{future_age} yrs (+{step}y)")
+        inflation_multipliers.append((1.0 + 0.05) ** step)
         traj_cur_rows.append(build_feature_row(
             future_age, data.get('sex', 'female'), data.get('bmi', 23.5),
             data.get('children', 0), data.get('smoker', False), data.get('region', 'southwest')
@@ -194,6 +290,9 @@ def simulate_scenarios(data):
     cur_preds = np.expm1(model.predict(pd.DataFrame(traj_cur_rows, columns=FEATURE_COLS)))
     opt_preds = np.expm1(model.predict(pd.DataFrame(traj_opt_rows, columns=FEATURE_COLS)))
 
+    cur_inflated = cur_preds * np.array(inflation_multipliers)
+    opt_inflated = opt_preds * np.array(inflation_multipliers)
+
     return {
         "smoke_cost": smoke_cost,
         "smoke_savings": smoke_savings,
@@ -202,8 +301,66 @@ def simulate_scenarios(data):
         "age_cost": age_cost,
         "age_diff": age_diff,
         "trajectory_labels": labels,
-        "trajectory_current": [round(x) for x in cur_preds],
-        "trajectory_optimized": [round(x) for x in opt_preds]
+        "trajectory_current": [round(x) for x in cur_inflated],
+        "trajectory_optimized": [round(x) for x in opt_inflated],
+        "medical_inflation_rate": 0.05
+    }
+
+def compare_profiles(data_a, data_b):
+    res_a = predict_single(data_a)
+    res_b = predict_single(data_b)
+    cost_a = res_a["predicted_annual"]
+    cost_b = res_b["predicted_annual"]
+    delta_dollar = cost_b - cost_a
+    delta_pct = round((delta_dollar / cost_a) * 100, 2) if cost_a > 0 else 0.0
+    return {
+        "profile_a": res_a,
+        "profile_b": res_b,
+        "annual_cost_a": cost_a,
+        "annual_cost_b": cost_b,
+        "delta_dollar": delta_dollar,
+        "delta_percent": delta_pct,
+        "annual_savings": max(0, -delta_dollar)
+    }
+
+def solve_budget(data, target_budget, period='annual'):
+    annual_target = float(target_budget) * 12.0 if str(period).lower() == 'monthly' else float(target_budget)
+    current_cost = predict_single(data)["predicted_annual"]
+
+    cur_bmi = float(data.get('bmi', 23.5))
+    candidate_bmis = list(np.arange(cur_bmi, 18.0, -0.5))
+    if not candidate_bmis or candidate_bmis[-1] > 18.5:
+        candidate_bmis.append(18.5)
+
+    # Batch test for non-smoking lifestyle with varying BMIs in a single model forward pass
+    rows = [build_feature_row(
+        data.get('age', 32), data.get('sex', 'female'), round(float(b), 1),
+        data.get('children', 0), False, data.get('region', 'southwest')
+    ) for b in candidate_bmis]
+
+    batch_df = pd.DataFrame(rows, columns=FEATURE_COLS)
+    preds = np.expm1(model.predict(batch_df))
+
+    solved_bmi = cur_bmi
+    feasible = False
+    final_cost = float(preds[0])
+
+    for b, cost in zip(candidate_bmis, preds):
+        if cost <= annual_target:
+            solved_bmi = round(float(b), 1)
+            final_cost = float(cost)
+            feasible = True
+            break
+        final_cost = float(cost)
+
+    return {
+        "target_budget": round(annual_target),
+        "current_cost": current_cost,
+        "feasible": feasible or (current_cost <= annual_target),
+        "target_bmi": solved_bmi,
+        "required_smoke_cessation": data.get('smoker', False),
+        "projected_cost": round(final_cost),
+        "projected_savings": max(0, current_cost - round(final_cost))
     }
 
 try:
@@ -277,7 +434,7 @@ class MediRiskHandler(SimpleHTTPRequestHandler):
         if self.path == '/api/model_info':
             info = {
                 "model_name": "Random Forest Regressor",
-                "status": "Champion Model from ML project 2.ipynb",
+                "status": "Champion Model from ML project 1.ipynb",
                 "hyperparameters": {
                     "n_estimators": 300,
                     "max_depth": 6,
@@ -313,21 +470,118 @@ class MediRiskHandler(SimpleHTTPRequestHandler):
         post_body = self.rfile.read(content_len) if content_len > 0 else b'{}'
         try:
             data = json.loads(post_body.decode('utf-8'))
-        except Exception:
-            data = {}
-
-        if self.path in ['/api/predict', '/api/v1/predict']:
-            result = predict_single(data)
-            result['status'] = 'success'
-            result['api_version'] = 'v1.2'
-            self.send_json(result)
+        except Exception as e:
+            self.send_json({
+                "status": "error",
+                "error": "Invalid JSON format",
+                "message": f"Failed to parse request body as valid JSON: {str(e)}"
+            }, status=400)
             return
 
-        if self.path in ['/api/simulate', '/api/v1/simulate']:
-            result = simulate_scenarios(data)
-            result['status'] = 'success'
-            result['api_version'] = 'v1.2'
-            self.send_json(result)
+        if not isinstance(data, dict):
+            self.send_json({
+                "status": "error",
+                "error": "Invalid payload structure",
+                "message": "Expected a JSON object (key-value dictionary)."
+            }, status=400)
+            return
+
+        if self.path in ['/api/predict', '/api/v1/predict']:
+            cleaned_data, errors = validate_policyholder_input(data)
+            if errors:
+                self.send_json({
+                    "status": "error",
+                    "error": "Validation failed",
+                    "details": errors
+                }, status=400)
+                return
+
+            try:
+                result = predict_single(cleaned_data)
+                result['status'] = 'success'
+                result['api_version'] = 'v1.2'
+                self.send_json(result)
+            except Exception as ex:
+                self.send_json({
+                    "status": "error",
+                    "error": "Internal inference error",
+                    "message": str(ex)
+                }, status=500)
+            return
+
+        if self.path in ['/api/simulate', '/api/v1/simulate', '/api/trajectory', '/api/v1/trajectory']:
+            cleaned_data, errors = validate_policyholder_input(data)
+            if errors:
+                self.send_json({
+                    "status": "error",
+                    "error": "Validation failed",
+                    "details": errors
+                }, status=400)
+                return
+
+            try:
+                result = simulate_scenarios(cleaned_data)
+                result['status'] = 'success'
+                result['api_version'] = 'v1.2'
+                self.send_json(result)
+            except Exception as ex:
+                self.send_json({
+                    "status": "error",
+                    "error": "Internal simulation error",
+                    "message": str(ex)
+                }, status=500)
+            return
+
+        if self.path in ['/api/compare', '/api/v1/compare']:
+            raw_a = data.get('profile_a', data.get('a', {}))
+            raw_b = data.get('profile_b', data.get('b', {}))
+            clean_a, errs_a = validate_policyholder_input(raw_a)
+            clean_b, errs_b = validate_policyholder_input(raw_b)
+            if errs_a or errs_b:
+                all_errs = [f"Profile A: {e}" for e in errs_a] + [f"Profile B: {e}" for e in errs_b]
+                self.send_json({
+                    "status": "error",
+                    "error": "Validation failed on comparison profiles",
+                    "details": all_errs
+                }, status=400)
+                return
+
+            try:
+                result = compare_profiles(clean_a, clean_b)
+                result['status'] = 'success'
+                result['api_version'] = 'v1.2'
+                self.send_json(result)
+            except Exception as ex:
+                self.send_json({
+                    "status": "error",
+                    "error": "Internal comparison error",
+                    "message": str(ex)
+                }, status=500)
+            return
+
+        if self.path in ['/api/budget', '/api/v1/budget']:
+            target_budget = data.get('target_budget', data.get('budget', 3000))
+            period = data.get('period', 'annual')
+            clean_data, errors = validate_policyholder_input(data)
+            if errors:
+                self.send_json({
+                    "status": "error",
+                    "error": "Validation failed",
+                    "details": errors
+                }, status=400)
+                return
+
+            try:
+                result = solve_budget(clean_data, target_budget, period)
+                result['status'] = 'success'
+                result['api_version'] = 'v1.2'
+                self.send_json(result)
+            except Exception as ex:
+                self.send_json({
+                    "status": "error",
+                    "error": "Internal budget calculation error",
+                    "message": str(ex)
+                }, status=500)
             return
 
         if self.path == '/api/v1/webhook':
@@ -374,7 +628,7 @@ def main():
     print("=" * 72)
     print("   [+] MediRisk - Health Insurance Cost Predictor [+]   ")
     print("=" * 72)
-    print("* Best Model   : Random Forest Regressor (from 'ML project 2.ipynb')")
+    print("* Best Model   : Random Forest Regressor (from 'ML project 1.ipynb')")
     print("* Test R2 Score: 0.8668 (86.7% variance explained)")
     print("* Test MAE     : $1,973.45 (Average prediction error < $2,000)")
     print("* Test RMSE    : $4,521.78")

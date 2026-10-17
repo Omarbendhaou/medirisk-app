@@ -33,9 +33,9 @@ USER user
 # Hugging Face Spaces expects traffic on port 7860
 EXPOSE 7860
 
-# Container healthcheck querying the model telemetry endpoint
+# Container healthcheck querying the model telemetry endpoint dynamically
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:7860/api/model_info')" || exit 1
+  CMD python -c "import urllib.request, os; p = os.environ.get('PORT', '7860'); urllib.request.urlopen(f'http://localhost:{p}/api/model_info')" || exit 1
 
 # Launch the MediRisk server
 CMD ["python", "app.py"]

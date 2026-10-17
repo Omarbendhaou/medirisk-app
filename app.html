@@ -114,8 +114,13 @@
         </button>
       </nav>
 
-      <!-- Utilities: Theme Switcher -->
+      <!-- Utilities: Research Paper & Theme Switcher -->
       <div class="flex items-center space-x-2">
+        <a href="/report.pdf" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-cyan-500/40 bg-cyan-50/80 dark:bg-cyan-950/50 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 text-cyan-800 dark:text-cyan-300 text-xs font-semibold transition-colors shadow-xs" title="View Full Actuarial Research Publication (PDF)">
+          <svg class="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <span class="hidden sm:inline">Research Report</span>
+          <span class="text-[10px] uppercase font-mono px-1 py-0.5 rounded bg-cyan-200/60 dark:bg-cyan-900/80 text-cyan-900 dark:text-cyan-200 font-bold">PDF</span>
+        </a>
         <button id="theme-toggle" onclick="toggleTheme()" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Toggle Theme">
           <svg id="theme-sun" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 9h-1m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
           <svg id="theme-moon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
@@ -366,7 +371,7 @@
                 </div>
                 <div class="text-sm font-extrabold text-cyan-700 dark:text-cyan-300 mt-1" id="tier-premium-silver">$365/mo</div>
                 <div class="text-[10px] text-slate-500 mt-0.5">Ded: $4,500</div>
-                <div class="text-[10px] text-slate-400">OOP Max: $8,700</div>
+                <div class="text-[10px] text-slate-400">OOP Max: $8,500</div>
               </div>
 
               <!-- Gold -->
@@ -374,15 +379,15 @@
                 <div class="text-[11px] font-bold text-amber-600 dark:text-amber-300">GOLD (80%)</div>
                 <div class="text-sm font-extrabold text-slate-900 dark:text-white mt-1" id="tier-premium-gold">$505/mo</div>
                 <div class="text-[10px] text-slate-500 mt-0.5">Ded: $1,500</div>
-                <div class="text-[10px] text-slate-400">OOP Max: $6,500</div>
+                <div class="text-[10px] text-slate-400">OOP Max: $6,000</div>
               </div>
 
               <!-- Platinum -->
               <div id="tier-card-platinum" class="tier-card p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 text-center transition-all hover:border-slate-400">
                 <div class="text-[11px] font-bold text-purple-600 dark:text-purple-300">PLATINUM (90%)</div>
                 <div class="text-sm font-extrabold text-slate-900 dark:text-white mt-1" id="tier-premium-platinum">$680/mo</div>
-                <div class="text-[10px] text-slate-500 mt-0.5">Ded: $250</div>
-                <div class="text-[10px] text-slate-400">OOP Max: $3,200</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Ded: $500</div>
+                <div class="text-[10px] text-slate-400">OOP Max: $3,000</div>
               </div>
             </div>
 
@@ -835,7 +840,7 @@
       <!-- Trajectory Chart -->
       <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
         <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-0.5">10-Year Cost Projection</h3>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Current profile trajectory versus optimized lifestyle path (Non-smoker & BMI &le; 24.0).</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Current profile trajectory versus optimized lifestyle path (Non-smoker & BMI &le; 24.0) with 5.0% annual compounding medical inflation.</p>
         <div class="relative h-64">
           <canvas id="scenarioComparisonChart"></canvas>
         </div>
@@ -1274,9 +1279,10 @@
       const optTraj = [];
       for (let i = 0; i <= 10; i += 2) {
         const fAge = state.age + i;
+        const inflation = Math.pow(1.05, i);
         labels.push(`${fAge} yrs (+${i}y)`);
-        currentTraj.push(rfOfflinePredict({ ...state, age: fAge }).total);
-        optTraj.push(rfOfflinePredict({ ...state, age: fAge, smoker: false, bmi: Math.min(state.bmi, 24.0) }).total);
+        currentTraj.push(Math.round(rfOfflinePredict({ ...state, age: fAge }).total * inflation));
+        optTraj.push(Math.round(rfOfflinePredict({ ...state, age: fAge, smoker: false, bmi: Math.min(state.bmi, 24.0) }).total * inflation));
       }
 
       renderSimulationResults({

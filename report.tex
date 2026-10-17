@@ -277,7 +277,7 @@ Key distributional challenges addressed in this research include:
 \section{Project Scope: From Data Mining to Operational Software}
 This project bridges the gap between theoretical data science and enterprise decision-making through a two-phase architecture:
 \begin{enumerate}
-    \item \textbf{Phase 1 (Machine Learning Engineering):} Executed in \texttt{ML project 2.ipynb}, focusing on rigorous data profiling, monotonic log-transformations, feature engineering, and cross-validated benchmarking across multiple regression paradigms.
+    \item \textbf{Phase 1 (Machine Learning Engineering):} Executed in \texttt{ML project 1.ipynb}, focusing on rigorous data profiling, monotonic log-transformations, feature engineering, and cross-validated benchmarking across multiple regression paradigms.
     \item \textbf{Phase 2 (Full-Stack Operational Deployment):} Implemented in \texttt{app.py} and \texttt{app.html}, delivering an interactive decision-support system featuring real-time quote generation, empirical prediction intervals, automated Affordable Care Act (ACA) metallic plan tier matching, explainable feature attribution, dual profile counterfactual comparisons, and 10-year compounding trajectory simulations.
 \end{enumerate}
 
@@ -331,7 +331,7 @@ The study utilizes the standardized \texttt{medical\_insurance.csv} dataset comp
 \end{table}
 
 \section{Data Integrity and Missing Value Auditing}
-An initial audit of all 2,772 rows confirmed complete data integrity: zero null, NaN, or corrupted values across all columns. The cohort presents a balanced gender distribution (50.5\% male vs. 49.5\% female), uniform geographic dispersion across four U.S. quadrants (Northeast, Northwest, Southeast, Southwest), and a 20.5\% active tobacco smoking prevalence.
+An initial audit of all 2,772 rows confirmed complete data integrity: zero null, NaN, or corrupted values across all columns. Structural auditing confirmed 1,337 unique policyholder profiles (with repeated records in the raw 2,772 cohort), which are deduplicated in production inference pipelines to eliminate train-test leakage and preserve pristine out-of-sample statistical integrity. The cohort presents a balanced gender distribution (50.5\% male vs. 49.5\% female), uniform geographic dispersion across four U.S. quadrants (Northeast, Northwest, Southeast, Southwest), and a 20.5\% active tobacco smoking prevalence.
 
 \section{Univariate Distributions: Demographic and Financial Profiles}
 Table~\ref{tab:descriptive_stats} presents the descriptive statistical metrics for the continuous variables in the cohort.
@@ -359,7 +359,7 @@ Table~\ref{tab:descriptive_stats} presents the descriptive statistical metrics f
 Correlation analysis identified chronological age ($r = +0.30$) and BMI ($r = +0.20$) as significant continuous correlates of medical charges. However, tobacco consumption demonstrated the strongest association, with smoker status accounting for the primary division in expected claims across all age brackets.
 
 \section{Outlier Diagnostics via IQR and Z-Score Boundaries}
-Using standard Tukey interquartile boundaries ($\text{IQR} = Q_3 - Q_1$), charges above $\$34,489.36$ qualify as mathematical outliers. However, clinical and actuarial inspection confirms these observations represent legitimate high-cost claims driven by acute care needs rather than data entry anomalies. Retaining these records is essential for preserving the tail risk required in solvency modeling.
+Using standard Tukey interquartile boundaries ($\text{IQR} = Q_3 - Q_1$), charges above $\$34,412.97$ qualify as mathematical outliers. However, clinical and actuarial inspection confirms these observations represent legitimate high-cost claims driven by acute care needs rather than data entry anomalies. Retaining these records is essential for preserving the tail risk required in solvency modeling.
 
 \section{The Multiplicative Synergy: BMI $\times$ Tobacco Interaction}
 A critical empirical finding is the non-linear interaction between elevated BMI and smoking status. As shown in Figure~\ref{fig:interaction}, smoking increases average annual claims by approximately $\$9,000$ to $\$10,000$ for non-obese individuals ($\text{BMI} < 30$), but by more than $\$30,000$ when combined with clinical obesity ($\text{BMI} \ge 30$).
@@ -418,14 +418,14 @@ Categorical attributes were converted into numerical indicators using one-hot en
 \textbf{Index} & \textbf{Feature Dimension} & \textbf{Transformation / Encoding} & \textbf{Value Representation} \\
 \hline
 0 & \texttt{age} & Continuous Scaled & 18 to 64 years \\
-1 & \texttt{bmi} & Continuous Scaled & 15.96 to 53.13 \\
-2 & \texttt{children} & Integer Continuous & 0 to 5 dependents \\
-3 & \texttt{sex\_male} & Binary Indicator (Drop Female) & 1 = Male, 0 = Female \\
-4 & \texttt{smoker\_yes} & Binary Indicator (Drop No) & 1 = Smoker, 0 = Non-Smoker \\
-5 & \texttt{region\_northwest} & Binary Dummy & 1 = Northwest, 0 = Other \\
-6 & \texttt{region\_southeast} & Binary Dummy & 1 = Southeast, 0 = Other \\
-7 & \texttt{region\_southwest} & Binary Dummy & 1 = Southwest, 0 = Other \\
-8 & \texttt{bmi\_obese} & Binary Threshold Feature & 1 if $\text{BMI} \ge 30$, else 0 \\
+1 & \texttt{sex} & Binary Indicator (Female = 0, Male = 1) & 1 = Male, 0 = Female \\
+2 & \texttt{bmi} & Continuous Scaled & 15.96 to 53.13 \\
+3 & \texttt{children} & Integer Continuous & 0 to 5 dependents \\
+4 & \texttt{smoker} & Binary Indicator (No = 0, Yes = 1) & 1 = Smoker, 0 = Non-Smoker \\
+5 & \texttt{bmi\_category} & Ordinal Clinical Binning & 0 = Underweight, 1 = Normal, 2 = Overweight, 3 = Obese \\
+6 & \texttt{region\_northwest} & Binary Dummy & 1 = Northwest, 0 = Other \\
+7 & \texttt{region\_southeast} & Binary Dummy & 1 = Southeast, 0 = Other \\
+8 & \texttt{region\_southwest} & Binary Dummy & 1 = Southwest, 0 = Other \\
 \hline
 \end{tabular}%
 }
@@ -448,8 +448,8 @@ The complete dataset ($N = 2,772$) was partitioned into:
 Three candidate regression architectures were implemented and benchmarked:
 \begin{enumerate}
     \item \textbf{Ordinary Least Squares (OLS) Linear Regression:} Serves as the traditional actuarial baseline estimator.
-    \item \textbf{Decision Tree Regressor (CART):} Single hierarchical tree evaluating basic recursive partitioning ($depth = 6$).
-    \item \textbf{Random Forest Regressor:} Bagged ensemble of decorrelated decision trees with randomized feature subspace selection ($B = 300$, $depth = 6$, $min\_samples\_split = 6$).
+    \item \textbf{Gradient Boosting Regressor (GBR):} Forward stage-wise additive tree ensemble minimizing least-squares deviance ($B = 300$, $depth = 3$, $learning\_rate = 0.05$).
+    \item \textbf{Random Forest Regressor:} Bagged ensemble of decorrelated decision trees with randomized feature subspace selection ($B = 300$, $depth = 6$, $min\_samples\_split = 2$).
 \end{enumerate}
 
 \section{Benchmark Comparative Evaluation}
@@ -465,8 +465,8 @@ Table~\ref{tab:benchmarks} summarizes performance across the holdout testing set
 \hline
 \textbf{Model Architecture} & \textbf{Test $R^2$} & \textbf{MAE (\$)} & \textbf{RMSE (\$)} & \textbf{Actuarial Verdict} \\
 \hline
-Linear Regression (OLS) & 0.5043 & \$4,362.56 & \$6,192.14 & Rejected (Underfitting) \\
-Decision Tree (CART, d=6) & 0.7812 & \$2,488.12 & \$5,310.45 & Secondary Baseline \\
+Linear Regression (OLS) & 0.5043 & \$4,362.56 & \$8,722.40 & Rejected (Underfitting) \\
+Gradient Boosting (GBR) & 0.8651 & \$2,044.62 & \$4,549.61 & Close Runner-Up \\
 \textbf{Random Forest Ensemble} & \textbf{0.8668} & \textbf{\$1,973.45} & \textbf{\$4,521.78} & \textbf{Selected Best Model} \\
 \hline
 \end{tabular}%
@@ -495,7 +495,7 @@ Figure~\ref{fig:importance} displays the Gini impurity feature importances extra
 \label{fig:importance}
 \end{figure}
 
-Smoking status accounts for over 52\% of total split importance, followed by BMI (20.3\%) and chronological age (17.5\%). Geographic region and gender demonstrated marginal predictive weight, corroborating standard underwriting guidelines where lifestyle and biometrics take precedence.
+Smoking status accounts for over 51.5\% of total split importance, followed closely by chronological age (38.9\%--39.4\%) and BMI (4.3\%--5.0\%). Geographic region and gender demonstrated marginal predictive weight, corroborating standard underwriting guidelines where lifestyle and primary physiological risk factors take precedence.
 
 % ==============================================================
 % CHAPTER 5: MediRisk System Architecture and Software Implementation
